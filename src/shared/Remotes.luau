@@ -3,29 +3,31 @@
 	Single source of truth for networking. The server creates the instances; clients wait for them.
 
 	Client -> Server
-		Chop (RemoteEvent)            (standId: string?)  -- one training chop, optionally aimed at a stand
-		Action (RemoteFunction)       (action: string, arg: any) -> { ok: boolean, message: string? }
-		RequestData (RemoteFunction)  () -> snapshot table
+		Chop (RemoteEvent)            ()  -- one manual chop (server finds your training zone)
+		StartRun (RemoteFunction)     () -> { ok, message?, Walls, Distance, Wins, Duration }
+		Action (RemoteFunction)       (action: string, arg: string?) -> { ok: boolean, message: string?, ... }
+		RequestData (RemoteFunction)  () -> profile snapshot
 
 	Server -> Client
 		DataSync (RemoteEvent)        (changes: { [string]: any })
-		ChopResult (RemoteEvent)      (gain: number, isCrit: boolean)
-		ObjectSmashed (RemoteEvent)   (player: Player, standId: string, coins: number)  -- fired to all
+		ChopResult (RemoteEvent)      (gain: number, idle: boolean)
+		Hatched (RemoteEvent)         (eggId: string, petId: string, uid: string)
 		Notify (RemoteEvent)          (message: string, kind: "Info" | "Success" | "Error")
 ]]
 
-local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local FOLDER_NAME = "Remotes"
 
 local DEFINITIONS = {
 	Chop = "RemoteEvent",
+	StartRun = "RemoteFunction",
 	Action = "RemoteFunction",
 	RequestData = "RemoteFunction",
 	DataSync = "RemoteEvent",
 	ChopResult = "RemoteEvent",
-	ObjectSmashed = "RemoteEvent",
+	Hatched = "RemoteEvent",
 	Notify = "RemoteEvent",
 }
 
@@ -53,11 +55,12 @@ end
 
 local Remotes = {
 	Chop = folder:WaitForChild("Chop") :: RemoteEvent,
+	StartRun = folder:WaitForChild("StartRun") :: RemoteFunction,
 	Action = folder:WaitForChild("Action") :: RemoteFunction,
 	RequestData = folder:WaitForChild("RequestData") :: RemoteFunction,
 	DataSync = folder:WaitForChild("DataSync") :: RemoteEvent,
 	ChopResult = folder:WaitForChild("ChopResult") :: RemoteEvent,
-	ObjectSmashed = folder:WaitForChild("ObjectSmashed") :: RemoteEvent,
+	Hatched = folder:WaitForChild("Hatched") :: RemoteEvent,
 	Notify = folder:WaitForChild("Notify") :: RemoteEvent,
 }
 

@@ -18,6 +18,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Formulas = require(Shared.Formulas)
 local NumberFormat = require(Shared.NumberFormat)
 local Remotes = require(Shared.Remotes)
 local Signal = require(Shared.Signal)
@@ -27,15 +28,23 @@ local SYNC_INTERVAL = 0.1
 
 local DEFAULT_DATA = {
 	SchemaVersion = Config.Data.SchemaVersion,
-	Power = 0,
-	Coins = 0,
+	Strength = 0,
+	Wins = 0, -- spendable (eggs, trails)
+	TotalWins = 0, -- lifetime, unlocks hand items + leaderboard
 	Rebirths = 0,
-	OwnedBelts = { White = true },
-	EquippedBelt = "White",
-	OwnedAuras = {},
-	EquippedAura = "None",
-	Upgrades = { IronPalms = 0, Focus = 0, Greed = 0, Speed = 0 },
-	Stats = { TotalChops = 0, ObjectsSmashed = 0, TotalPowerEarned = 0, BestChop = 0 },
+	BestDistance = 0,
+	EquippedItem = "BareFists",
+	Pets = {}, -- [uid] = petId   (uids are "p1", "p2", ...)
+	EquippedPets = {}, -- { uid }
+	NextPetUid = 1,
+	OwnedTrails = {}, -- [trailId] = true
+	EquippedTrail = "None",
+	Boosts = { Strength = 0, Wins = 0, Luck = 0 }, -- expiry (Unix time)
+	Passes = {}, -- [passName] = true
+	Receipts = {}, -- recent processed developer-product purchase ids
+	StarterPackBought = false,
+	LastOnline = 0,
+	Stats = { Chops = 0, Runs = 0, WallsBroken = 0, EggsHatched = 0 },
 }
 
 type Profile = {
@@ -83,18 +92,31 @@ end
 
 local function sanitize(data)
 	reconcile(data, DEFAULT_DATA)
-	data.OwnedBelts.White = true
-	if not data.OwnedBelts[data.EquippedBelt] then
-		data.EquippedBelt = "White"
-	end
-	if data.EquippedAura ~= "None" and not data.OwnedAuras[data.EquippedAura] then
-		data.EquippedAura = "None"
-	end
-	for _, key in { "Power", "Coins", "Rebirths" } do
+	for _, key in { "Strength", "Wins", "TotalWins", "Rebirths", "BestDistance", "NextPetUid" } do
 		local n = data[key]
-		if n ~= n or n < 0 or n == math.huge then
-			data[key] = 0
+		if type(n) ~= "number" or n ~= n or n < 0 or n == math.huge then
+			data[key] = DEFAULT_DATA[key]
 		end
+	end
+	if not Formulas.GetItem(data.EquippedItem) or not Formulas.IsItemUnlocked(data, data.EquippedItem) then
+		data.EquippedItem = "BareFists"
+	end
+	-- Drop unknown pets, then keep only owned, unique equipped uids within the slot count.
+	for uid, petId in data.Pets do
+		if type(uid) ~= "string" or not Config.Pets[petId] then
+			data.Pets[uid] = nil
+		end
+	end
+	local equipped, seen = {}, {}
+	for _, uid in data.EquippedPets do
+		if data.Pets[uid] and not seen[uid] and #equipped < Formulas.GetPetSlots(data) then
+			seen[uid] = true
+			table.insert(equipped, uid)
+		end
+	end
+	data.EquippedPets = equipped
+	if data.EquippedTrail ~= "None" and not data.OwnedTrails[data.EquippedTrail] then
+		data.EquippedTrail = "None"
 	end
 	data.SchemaVersion = Config.Data.SchemaVersion
 	return data
@@ -123,22 +145,20 @@ end
 -- Leaderstats
 --------------------------------------------------------------------------------
 
+local LEADERSTATS = {
+	{ Name = "⚡ Strength", Key = "Strength" },
+	{ Name = "🏆 Wins", Key = "Wins" },
+	{ Name = "🌀 Rebirths", Key = "Rebirths" },
+}
+
 local function createLeaderstats(player: Player): Folder
 	local folder = Instance.new("Folder")
 	folder.Name = "leaderstats"
-
-	local power = Instance.new("StringValue")
-	power.Name = "⚡ Power"
-	power.Parent = folder
-
-	local coins = Instance.new("StringValue")
-	coins.Name = "🪙 Coins"
-	coins.Parent = folder
-
-	local rebirths = Instance.new("IntValue")
-	rebirths.Name = "Rebirths"
-	rebirths.Parent = folder
-
+	for _, stat in LEADERSTATS do
+		local value = Instance.new("StringValue")
+		value.Name = stat.Name
+		value.Parent = folder
+	end
 	folder.Parent = player
 	return folder
 end
@@ -148,18 +168,11 @@ local function refreshLeaderstats(profile: Profile)
 	if not folder then
 		return
 	end
-	local data = profile.Data
-	local power = folder:FindFirstChild("⚡ Power") :: StringValue?
-	local coins = folder:FindFirstChild("🪙 Coins") :: StringValue?
-	local rebirths = folder:FindFirstChild("Rebirths") :: IntValue?
-	if power then
-		power.Value = NumberFormat.Abbreviate(data.Power)
-	end
-	if coins then
-		coins.Value = NumberFormat.Abbreviate(data.Coins)
-	end
-	if rebirths then
-		rebirths.Value = data.Rebirths
+	for _, stat in LEADERSTATS do
+		local value = folder:FindFirstChild(stat.Name)
+		if value and value:IsA("StringValue") then
+			value.Value = NumberFormat.Abbreviate(profile.Data[stat.Key] or 0)
+		end
 	end
 end
 
@@ -232,6 +245,7 @@ local function saveProfile(player: Player, profile: Profile, release: boolean)
 
 	local key = KEY_PREFIX .. player.UserId
 	local lostLock = false
+	profile.Data.LastOnline = os.time()
 
 	local ok, err = retry(3, function()
 		dataStore:UpdateAsync(key, function(record)
@@ -293,6 +307,14 @@ end
 function DataService:IsPersistent(player: Player): boolean
 	local profile = profiles[player]
 	return profile ~= nil and profile.Persistent
+end
+
+-- Saves immediately (yields). Used after Robux purchases.
+function DataService:SaveNow(player: Player)
+	local profile = profiles[player]
+	if profile then
+		saveProfile(player, profile, false)
+	end
 end
 
 -- Yields until the player's profile is loaded (or they leave / timeout).

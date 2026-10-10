@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Render quick isometric previews of the baked map (src/workspace/Dojos/*.model.json) so you
-can eyeball the layout without opening Studio. Writes docs/map/<Dojo>.png.
+Render quick isometric previews of the baked map (src/workspace/Map/*.model.json) so you
+can eyeball the layout without opening Studio. Writes docs/map/Hub.png and docs/map/Lane.png.
 
     python3 tools/mapgen/render_preview.py      (needs Pillow + numpy)
 
@@ -16,7 +16,13 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MAP_DIR = os.path.join(ROOT, "src", "workspace", "Dojos")
+MAP_DIR = os.path.join(ROOT, "src", "workspace", "Map")
+
+# name -> (min x, max x, min z, max z) region to show
+VIEWS = {
+    "Hub": (-360, 270, -190, 130),
+    "Lane": (-150, 150, 40, 1000),
+}
 OUT_DIR = os.path.join(ROOT, "docs", "map")
 
 WIDTH, HEIGHT = 1600, 1000
@@ -125,6 +131,8 @@ def render(name, parts):
     for props in parts:
         pos, rot = cframe(props)
         size = props.get("Size", [4, 1, 2])
+        if props.get("Transparency", 0) >= 0.95:
+            continue
         color = np.array(props.get("Color", [0.64, 0.64, 0.64])) * 255
         shape = props.get("Shape", "Block")
         neon = props.get("Material") == "Neon"
@@ -183,22 +191,29 @@ def render(name, parts):
         font = ImageFont.truetype("DejaVuSans-Bold.ttf", 44)
     except OSError:
         font = ImageFont.load_default()
-    draw.text((40, 30), f"{name} — baked map preview", fill=(255, 255, 255), font=font, stroke_width=4, stroke_fill=(30, 20, 30))
+    draw.text((40, 30), f"{name} — map preview", fill=(255, 255, 255), font=font, stroke_width=4, stroke_fill=(30, 20, 30))
     return image
 
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
+    parts = []
     for filename in sorted(os.listdir(MAP_DIR)):
-        if not filename.endswith(".model.json"):
-            continue
-        name = filename.removesuffix(".model.json")
-        with open(os.path.join(MAP_DIR, filename), encoding="utf-8") as f:
-            tree = json.load(f)
-        parts = collect(tree, [])
+        if filename.endswith(".model.json"):
+            with open(os.path.join(MAP_DIR, filename), encoding="utf-8") as f:
+                collect(json.load(f), parts)
+    for name, (min_x, max_x, min_z, max_z) in VIEWS.items():
+        inside = []
+        for props in parts:
+            pos, _ = cframe(props)
+            if min_x - 40 <= pos[0] <= max_x + 40 and min_z - 40 <= pos[2] <= max_z + 40:
+                inside.append(props)
+        floor = {"Name": "Floor", "Size": [max_x - min_x, 0.01, max_z - min_z], "Transparency": 1,
+                 "CFrame": {"CFrame": {"position": [(min_x + max_x) / 2, -0.01, (min_z + max_z) / 2],
+                                       "orientation": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}}}
         target = os.path.join(OUT_DIR, f"{name}.png")
-        render(name, parts).save(target)
-        print(f"  {name}: {len(parts)} parts -> {os.path.relpath(target, ROOT)}")
+        render(name, [floor] + inside).save(target)
+        print(f"  {name}: {len(inside)} parts -> {os.path.relpath(target, ROOT)}")
 
 
 if __name__ == "__main__":

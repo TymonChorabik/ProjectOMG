@@ -128,6 +128,13 @@ CF.__index = function(c, key)
 		return v3(c._m[2], c._m[5], c._m[8])
 	elseif key == "Rotation" then
 		return cf(0, 0, 0, c._m)
+	elseif key == "Inverse" then
+		return function(self)
+			local m = self._m
+			local t = { m[1], m[4], m[7], m[2], m[5], m[8], m[3], m[6], m[9] }
+			local x, y, z = rotate(t, self._x, self._y, self._z)
+			return cf(-x, -y, -z, t)
+		end
 	elseif key == "GetComponents" then
 		return function(self)
 			local m = self._m
@@ -486,6 +493,29 @@ function Methods.FindFirstChildOfClass(self, className: string)
 	return nil
 end
 
+function Methods.GetPivot(self)
+	local primary = self._props.PrimaryPart
+	if primary then
+		return primary.CFrame
+	end
+	if isBasePart(self) then
+		return self.CFrame
+	end
+	return CFrame.new()
+end
+
+function Methods.PivotTo(self, target)
+	local delta = target * self:GetPivot():Inverse()
+	if isBasePart(self) then
+		self.CFrame = delta * self.CFrame
+	end
+	for _, descendant in self:GetDescendants() do
+		if isBasePart(descendant) then
+			descendant.CFrame = delta * descendant.CFrame
+		end
+	end
+end
+
 function Methods.SetAttribute(self, name: string, value: any)
 	if self._attrs[name] == nil then
 		table.insert(self._attrOrder, name)
@@ -668,8 +698,9 @@ end
 local function serialize(inst): string
 	local props = {}
 	local keys = {}
-	for key in inst._props do
-		if key ~= "Name" then
+	for key, value in inst._props do
+		local isRef = type(value) == "table" and rawget(value, "_class") ~= nil
+		if key ~= "Name" and not isRef then
 			table.insert(keys, key)
 		end
 	end

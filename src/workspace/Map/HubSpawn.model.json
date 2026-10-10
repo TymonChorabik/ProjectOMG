@@ -1,0 +1,1 @@
+{"ClassName":"SpawnLocation","Properties":{"Anchored":true,"BackSurface":"Studs","BottomSurface":"Inlet","CFrame":{"CFrame":{"position":[0,0.6,-18],"orientation":[[-1,0,0],[0,1,0],[0,0,-1]]}},"Color":[1,0.7843,0.1569],"Duration":0,"FrontSurface":"Studs","LeftSurface":"Studs","Material":"Plastic","Neutral":true,"RightSurface":"Studs","Size":[12,1,12],"TopSurface":"Studs"}}

@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-Bake the dojo map into Rojo model files so it shows up in Studio's Workspace.
+Bake the hub map into Rojo model files so it shows up in Studio's Workspace.
 
-Runs the game's real MapBuilder (plus BreakableBuilder, Shapes, Config, ...) offline with the
+Runs the game's real MapBuilder (plus Config, PetModels, ItemModels, ...) offline with the
 Luau CLI on top of a small mock Roblox API (tools/mapgen/mock_roblox.luau), then converts the
-resulting instance tree into one `.model.json` per dojo:
+resulting instance tree into one `.model.json` per top-level map section:
 
-    src/workspace/Dojos/Starter.model.json
-    src/workspace/Dojos/Shaolin.model.json
+    src/workspace/Map/Ground.model.json
+    src/workspace/Map/Lane.model.json
+    src/workspace/Map/TrainingZones.model.json
     ...
 
-`default.project.json` maps that folder to Workspace.Dojos, so `rojo serve` / `rojo build`
-put the whole map — floors, decor, stands and every pre-fractured segment — into the place.
+`default.project.json` maps that folder to Workspace.Map, so `rojo serve` / `rojo build` put
+the whole hub — ground, cliffs, zones, pedestals, eggs, leaderboards and the 150-wall lane —
+into the place.
 
 Re-run after changing Config (objects, dojo colours, stud texture ids) or MapBuilder:
 
@@ -27,15 +29,15 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = os.path.join(ROOT, "src", "workspace", "Dojos")
+OUT_DIR = os.path.join(ROOT, "src", "workspace", "Map")
 
 MODULES = [
     ("ReplicatedStorage/Shared/Config", "src/shared/Config.luau"),
+    ("ReplicatedStorage/Shared/Formulas", "src/shared/Formulas.luau"),
     ("ReplicatedStorage/Shared/NumberFormat", "src/shared/NumberFormat.luau"),
     ("ReplicatedStorage/Shared/StudSurface", "src/shared/StudSurface.luau"),
-    ("ServerScriptService/Server/Modules/Shapes", "src/server/Modules/Shapes.luau"),
-    ("ServerScriptService/Server/Modules/BreakableLayout", "src/server/Modules/BreakableLayout.luau"),
-    ("ServerScriptService/Server/Modules/BreakableBuilder", "src/server/Modules/BreakableBuilder.luau"),
+    ("ReplicatedStorage/Shared/PetModels", "src/shared/PetModels.luau"),
+    ("ReplicatedStorage/Shared/ItemModels", "src/shared/ItemModels.luau"),
     ("ServerScriptService/Server/Modules/MapBuilder", "src/server/Modules/MapBuilder.luau"),
 ]
 
@@ -144,15 +146,15 @@ def main() -> int:
     os.makedirs(OUT_DIR)
 
     total = 0
-    for dojo in tree["Children"]:
-        target = os.path.join(OUT_DIR, f"{dojo['Name']}.model.json")
+    for section in tree["Children"]:
+        target = os.path.join(OUT_DIR, f"{section['Name']}.model.json")
         with open(target, "w", encoding="utf-8") as f:
-            json.dump(to_rojo(dojo, top=True), f, indent=1, ensure_ascii=False)
+            json.dump(to_rojo(section, top=True), f, separators=(",", ":"), ensure_ascii=False)
             f.write("\n")
-        n = count(dojo)
+        n = count(section)
         total += n
-        print(f"  {dojo['Name']:<8} {n:>5} instances -> {os.path.relpath(target, ROOT)}")
-    print(f"Baked {total} instances into Workspace.Dojos")
+        print(f"  {section['Name']:<14} {n:>5} instances -> {os.path.relpath(target, ROOT)}")
+    print(f"Baked {total} instances into Workspace.Map")
     return 0
 
 

@@ -22,8 +22,6 @@ MODULES = [
     ("Shared/Config", "src/shared/Config.luau"),
     ("Shared/Formulas", "src/shared/Formulas.luau"),
     ("Shared/NumberFormat", "src/shared/NumberFormat.luau"),
-    ("Server/Modules/Shapes", "src/server/Modules/Shapes.luau"),
-    ("Server/Modules/BreakableLayout", "src/server/Modules/BreakableLayout.luau"),
 ]
 
 PRELUDE = r"""

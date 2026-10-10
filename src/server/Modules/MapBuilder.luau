@@ -1,33 +1,46 @@
 --[[
 	MapBuilder.luau
-	Builds the four stud-themed training dojos (floors, walls, decor, breaking stands) from
-	Config. Used in two ways:
+	Builds the single studded hub (laid out like +1 Stone Skipping) from Config:
 
-	• Offline by tools/mapgen/build_map.py, which bakes the result into
-	  src/workspace/Dojos/*.model.json so the whole map is visible and editable in Studio.
-	• At runtime by WorldService, only if Workspace.Dojos is missing.
+	                         ┌──────── Board Wall lane (+Z, 150 walls, 6 biomes) ───────►
+	                         │
+	   Training zones (-X)   │ launch pad        Hand item pedestals (+X)
+	   x1 x4 x10 x20 R$ R$ R$│ spawn plaza       (unlocked by Wins)
+	                         │
+	                 eggs + "best in game" showcase, leaderboards (-Z)
 
-	Everything gameplay needs is read back from the map (stand attributes, ArrivalPad parts),
-	so you can move, restyle or redecorate dojos freely in Studio.
+	Used offline by tools/mapgen/build_map.py (baked into src/workspace/Map/*.model.json so it's
+	visible and editable in Studio) and at runtime by WorldService if Workspace.Map is missing.
+	Gameplay reads names/attributes back from the map: Zone_<Id>/Area, Item_<Id>, Egg_<Id>,
+	Lane/LaunchPad, Lane/Walls/Wall_<n>, Leaderboards/<BoardId>.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Formulas = require(Shared.Formulas)
+local ItemModels = require(Shared.ItemModels)
+local NumberFormat = require(Shared.NumberFormat)
+local PetModels = require(Shared.PetModels)
 local StudSurface = require(Shared.StudSurface)
-
-local BreakableBuilder = require(script.Parent.BreakableBuilder)
 
 local MapBuilder = {}
 
-MapBuilder.ROOT_NAME = "Dojos"
-MapBuilder.ARRIVAL_PAD = "ArrivalPad"
+MapBuilder.ROOT_NAME = "Map"
 
-local STAND_SPACING = 38
-local STAND_ROW_Z = 28
-local ARRIVAL_Z = -40
-local WALL_HEIGHT = 26
+-- Hub layout (studs). The lane runs toward +Z from the launch pad.
+local HUB = { MinX = -352, MaxX = 256, MinZ = -176, MaxZ = 80 }
+local GROUND_TILE = 16
+local GRASS = { Color3.fromRGB(120, 220, 60), Color3.fromRGB(100, 200, 48) }
+local STONE = { Color3.fromRGB(214, 226, 240), Color3.fromRGB(194, 208, 228) }
+local CLIFF = { Color3.fromRGB(176, 120, 70), Color3.fromRGB(150, 98, 56) }
+local INK = Color3.fromRGB(25, 20, 30)
+local WHITE = Color3.new(1, 1, 1)
+
+local ZONE = { FirstX = -86, Spacing = 38, Width = 30, MinZ = -30, Length = 90 }
+local ITEMS = { FirstX = 76, Spacing = 36, FirstZ = -14, RowSpacing = 32, PerRow = 5 }
+local SPAWN_POSITION = Vector3.new(0, 0.6, -18)
 
 --------------------------------------------------------------------------------
 -- Helpers
@@ -38,544 +51,862 @@ local function part(parent: Instance, props: { [string]: any }): Part
 	return StudSurface.NewPart(props)
 end
 
-local function cylinder(
+local function box(
 	parent: Instance,
-	props: { [string]: any },
-	height: number,
-	diameter: number,
-	cframe: CFrame
-): Part
-	props.Shape = Enum.PartType.Cylinder
-	props.Size = Vector3.new(height, diameter, diameter)
-	props.CFrame = cframe * CFrame.Angles(0, 0, math.rad(90))
+	name: string,
+	size: Vector3,
+	position: Vector3,
+	color: Color3,
+	extra: { [string]: any }?
+)
+	local props: { [string]: any } = { Name = name, Size = size, CFrame = CFrame.new(position), Color = color }
+	if extra then
+		for key, value in extra do
+			props[key] = value
+		end
+	end
 	return part(parent, props)
 end
 
-local function addLight(target: BasePart, color: Color3, range: number, brightness: number)
-	local light = Instance.new("PointLight")
-	light.Color = color
-	light.Range = range
-	light.Brightness = brightness
-	light.Shadows = false
-	light.Parent = target
+local function folder(parent: Instance, name: string, className: string?): Instance
+	local instance = Instance.new(className or "Folder")
+	instance.Name = name
+	instance.Parent = parent
+	return instance
 end
 
-local function addSurfaceText(
-	target: BasePart,
-	face: Enum.NormalId,
-	title: string,
-	subtitle: string,
-	titleColor: Color3
+local function shade(color: Color3, amount: number): Color3
+	return Color3.new(color.R * amount, color.G * amount, color.B * amount)
+end
+
+local function textLabel(
+	parent: Instance,
+	name: string,
+	text: string,
+	color: Color3,
+	heightScale: number,
+	order: number,
+	font: Enum.Font?
 )
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = face
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 40
-	gui.LightInfluence = 0
-	gui.Parent = target
-
-	local function label(text: string, yScale: number, heightScale: number, color: Color3)
-		local textLabel = Instance.new("TextLabel")
-		textLabel.BackgroundTransparency = 1
-		textLabel.Position = UDim2.fromScale(0.05, yScale)
-		textLabel.Size = UDim2.fromScale(0.9, heightScale)
-		textLabel.Font = Enum.Font.LuckiestGuy
-		textLabel.TextScaled = true
-		textLabel.Text = text
-		textLabel.TextColor3 = color
-		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = 6
-		stroke.Color = Color3.fromRGB(25, 20, 20)
-		stroke.Parent = textLabel
-		textLabel.Parent = gui
-	end
-
-	label(title, 0.06, 0.58, titleColor)
-	label(subtitle, 0.66, 0.28, Color3.new(1, 1, 1))
+	local label = Instance.new("TextLabel")
+	label.Name = name
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, heightScale)
+	label.Font = font or Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.Text = text
+	label.TextColor3 = color
+	label.LayoutOrder = order
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 3
+	stroke.Color = INK
+	stroke.Parent = label
+	label.Parent = parent
+	return label
 end
 
---------------------------------------------------------------------------------
--- Shared dojo pieces
---------------------------------------------------------------------------------
+type Line = { Name: string, Text: string, Color: Color3, Height: number, Font: Enum.Font? }
 
-local function buildFloor(model: Model, dojo)
-	local origin, size, colors = dojo.Origin, dojo.Size, dojo.Colors
-	part(model, {
-		Name = "Floor",
-		Size = Vector3.new(size.X, 2, size.Z),
-		CFrame = CFrame.new(origin + Vector3.new(0, -1, 0)),
-		Color = colors.Floor,
-		Checker = true,
-	})
-
-	-- Studded training mats (checkerboard) in front of the stands.
-	local tile = 12
-	for ix = -3, 2 do
-		for iz = -2, 0 do
-			local alt = (ix + iz) % 2 == 0
-			part(model, {
-				Name = "Mat",
-				Size = Vector3.new(tile - 0.2, 0.3, tile - 0.2),
-				CFrame = CFrame.new(origin + Vector3.new((ix + 0.5) * tile, 0.15, iz * tile - 4)),
-				Color = if alt then colors.Mat else colors.MatAlt,
-			})
-		end
-	end
-
-	-- Arrival pad.
-	part(model, {
-		Name = "ArrivalPad",
-		Size = Vector3.new(10, 0.4, 10),
-		CFrame = CFrame.new(origin + Vector3.new(0, 0.2, ARRIVAL_Z)),
-		Color = colors.Accent,
-	})
-end
-
-local function buildWalls(model: Model, dojo, invisible: boolean?)
-	local origin, size, colors = dojo.Origin, dojo.Size, dojo.Colors
-	local transparency = if invisible then 1 else 0
-	local halfX, halfZ = size.X / 2, size.Z / 2
-
-	-- Back wall (behind the stands), side walls and a low front fence.
-	part(model, {
-		Name = "BackWall",
-		Size = Vector3.new(size.X, WALL_HEIGHT, 2),
-		CFrame = CFrame.new(origin + Vector3.new(0, WALL_HEIGHT / 2, halfZ - 1)),
-		Color = colors.Wall,
-		Transparency = transparency,
-	})
-	for _, side in { -1, 1 } do
-		part(model, {
-			Name = "SideWall",
-			Size = Vector3.new(2, if invisible then WALL_HEIGHT else 12, size.Z),
-			CFrame = CFrame.new(
-				origin + Vector3.new(side * (halfX - 1), (if invisible then WALL_HEIGHT else 12) / 2, 0)
-			),
-			Color = colors.Wall,
-			Transparency = transparency,
-		})
-	end
-	part(model, {
-		Name = "FrontWall",
-		Size = Vector3.new(size.X, if invisible then WALL_HEIGHT else 4, 2),
-		CFrame = CFrame.new(origin + Vector3.new(0, (if invisible then WALL_HEIGHT else 4) / 2, -halfZ + 1)),
-		Color = colors.Trim,
-		Transparency = transparency,
-	})
-
-	-- Big dojo sign on the back wall, between the centre pillars.
-	local sign = part(model, {
-		Name = "DojoSign",
-		Size = Vector3.new(42, 10, 1),
-		CFrame = CFrame.new(origin + Vector3.new(0, WALL_HEIGHT - 7, halfZ - 2.5)),
-		Color = colors.Trim,
-	})
-	addSurfaceText(
-		sign,
-		Enum.NormalId.Front,
-		string.upper(dojo.Name),
-		`TRAINING x{dojo.TrainingMultiplier}`,
-		colors.Accent
-	)
-end
-
-local PILLAR_X = { -72, -48, -24, 24, 48, 72 }
-local LANTERN_X = { -60, -36, 36, 60 }
-
-local function buildPillars(model: Model, dojo, color: Color3, capColor: Color3)
-	local origin, size = dojo.Origin, dojo.Size
-	local z = size.Z / 2 - 4
-	for _, x in PILLAR_X do
-		part(model, {
-			Name = "Pillar",
-			Size = Vector3.new(3, WALL_HEIGHT, 3),
-			CFrame = CFrame.new(origin + Vector3.new(x, WALL_HEIGHT / 2, z)),
-			Color = color,
-		})
-		part(model, {
-			Name = "PillarCap",
-			Size = Vector3.new(4, 1.5, 4),
-			CFrame = CFrame.new(origin + Vector3.new(x, WALL_HEIGHT - 0.75, z)),
-			Color = capColor,
-		})
-	end
-end
-
-local function buildLanterns(model: Model, dojo, color: Color3)
-	local origin, size = dojo.Origin, dojo.Size
-	local z = size.Z / 2 - 6
-	for _, x in LANTERN_X do
-		part(model, {
-			Name = "LanternRope",
-			Size = Vector3.new(0.2, 4, 0.2),
-			CFrame = CFrame.new(origin + Vector3.new(x, WALL_HEIGHT - 3, z)),
-			Color = Color3.fromRGB(40, 30, 25),
-			Studs = false,
-		})
-		local lantern = part(model, {
-			Name = "Lantern",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(2.6, 2.6, 2.6),
-			CFrame = CFrame.new(origin + Vector3.new(x, WALL_HEIGHT - 6, z)),
-			Color = color,
-			Material = Enum.Material.Neon,
-			Studs = false,
-		})
-		addLight(lantern, color, 18, 1.4)
-	end
-end
-
---------------------------------------------------------------------------------
--- Themes
---------------------------------------------------------------------------------
-
-local Themes = {}
-
-function Themes.Starter(model: Model, dojo)
-	local origin, colors = dojo.Origin, dojo.Colors
-	buildWalls(model, dojo)
-	buildPillars(model, dojo, Color3.fromRGB(120, 76, 44), colors.Trim)
-	buildLanterns(model, dojo, Color3.fromRGB(255, 80, 60))
-
-	-- Bonsai trees in the corners.
-	for _, corner in
-		{ Vector3.new(-70, 0, -50), Vector3.new(70, 0, -50), Vector3.new(-70, 0, 45), Vector3.new(70, 0, 45) }
-	do
-		local base = origin + corner
-		cylinder(
-			model,
-			{ Name = "Trunk", Color = Color3.fromRGB(110, 70, 40) },
-			6,
-			1.6,
-			CFrame.new(base + Vector3.new(0, 3, 0))
-		)
-		part(model, {
-			Name = "Leaves",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(7, 7, 7),
-			CFrame = CFrame.new(base + Vector3.new(0, 7.5, 0)),
-			Color = Color3.fromRGB(70, 160, 70),
-		})
-		part(model, {
-			Name = "Leaves",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(4.5, 4.5, 4.5),
-			CFrame = CFrame.new(base + Vector3.new(2.5, 9.5, 1)),
-			Color = Color3.fromRGB(90, 185, 80),
-		})
-	end
-
-	-- Wooden training dummies along the side walls.
-	for _, x in { -60, 60 } do
-		local base = origin + Vector3.new(x, 0, 5)
-		cylinder(
-			model,
-			{ Name = "DummyPost", Color = Color3.fromRGB(150, 100, 60) },
-			7,
-			1.6,
-			CFrame.new(base + Vector3.new(0, 3.5, 0))
-		)
-		for _, y in { 4.5, 2.8 } do
-			part(model, {
-				Name = "DummyArm",
-				Size = Vector3.new(0.6, 0.6, 4),
-				CFrame = CFrame.new(base + Vector3.new(0, y, 0)),
-				Color = Color3.fromRGB(170, 116, 70),
-			})
-		end
-	end
-end
-
-function Themes.Shaolin(model: Model, dojo)
-	local origin, size, colors = dojo.Origin, dojo.Size, dojo.Colors
-	buildWalls(model, dojo)
-	buildPillars(model, dojo, colors.Wall, colors.Trim)
-	buildLanterns(model, dojo, Color3.fromRGB(255, 170, 60))
-
-	-- Sloped tile roof along the back wall.
-	for _, side in { -1, 1 } do
-		part(model, {
-			Name = "Roof",
-			Size = Vector3.new(size.X + 6, 1.2, 9),
-			CFrame = CFrame.new(origin + Vector3.new(0, WALL_HEIGHT + 0.5, size.Z / 2 - 1 + side * 3.5))
-				* CFrame.Angles(math.rad(side * 22), 0, 0),
-			Color = Color3.fromRGB(40, 50, 45),
-		})
-	end
-
-	-- Torii gate over the entrance.
-	local gateZ = -size.Z / 2 + 12
-	for _, x in { -14, 14 } do
-		cylinder(
-			model,
-			{ Name = "ToriiPost", Color = colors.Wall },
-			20,
-			2.4,
-			CFrame.new(origin + Vector3.new(x, 10, gateZ))
-		)
-	end
-	part(model, {
-		Name = "ToriiKasagi",
-		Size = Vector3.new(38, 2, 3),
-		CFrame = CFrame.new(origin + Vector3.new(0, 20.5, gateZ)),
-		Color = Color3.fromRGB(30, 30, 30),
-	})
-	part(model, {
-		Name = "ToriiNuki",
-		Size = Vector3.new(32, 1.4, 2),
-		CFrame = CFrame.new(origin + Vector3.new(0, 16.5, gateZ)),
-		Color = colors.Wall,
-	})
-
-	-- Stone lanterns.
-	for _, x in { -40, 40 } do
-		local base = origin + Vector3.new(x, 0, -30)
-		part(model, {
-			Name = "ToroBase",
-			Size = Vector3.new(3, 1, 3),
-			CFrame = CFrame.new(base + Vector3.new(0, 0.5, 0)),
-			Color = Color3.fromRGB(150, 146, 136),
-		})
-		part(model, {
-			Name = "ToroPost",
-			Size = Vector3.new(1.4, 4, 1.4),
-			CFrame = CFrame.new(base + Vector3.new(0, 3, 0)),
-			Color = Color3.fromRGB(160, 156, 146),
-		})
-		local light = part(model, {
-			Name = "ToroLight",
-			Size = Vector3.new(2.4, 2, 2.4),
-			CFrame = CFrame.new(base + Vector3.new(0, 6, 0)),
-			Color = Color3.fromRGB(255, 200, 110),
-			Material = Enum.Material.Neon,
-			Studs = false,
-		})
-		addLight(light, Color3.fromRGB(255, 190, 100), 16, 1.2)
-		part(model, {
-			Name = "ToroRoof",
-			Size = Vector3.new(4, 0.8, 4),
-			CFrame = CFrame.new(base + Vector3.new(0, 7.4, 0)),
-			Color = Color3.fromRGB(120, 116, 108),
-		})
-	end
-end
-
-function Themes.Cyber(model: Model, dojo)
-	local origin, size, colors = dojo.Origin, dojo.Size, dojo.Colors
-	buildWalls(model, dojo)
-	buildPillars(model, dojo, Color3.fromRGB(60, 64, 84), colors.Trim)
-
-	-- Neon strips along the back wall.
-	for _, y in { 5, 11 } do
-		part(model, {
-			Name = "NeonStrip",
-			Size = Vector3.new(size.X - 4, 0.6, 0.4),
-			CFrame = CFrame.new(origin + Vector3.new(0, y, size.Z / 2 - 2.2)),
-			Color = if y == 5 then colors.Trim else colors.Accent,
-			Material = Enum.Material.Neon,
-			Studs = false,
-		})
-	end
-
-	-- Glowing floor grid.
-	for x = -size.X / 2 + 16, size.X / 2 - 16, 16 do
-		part(model, {
-			Name = "GridLine",
-			Size = Vector3.new(0.3, 0.12, size.Z - 6),
-			CFrame = CFrame.new(origin + Vector3.new(x, 0.06, 0)),
-			Color = colors.Trim,
-			Material = Enum.Material.Neon,
-			Transparency = 0.4,
-			Studs = false,
-		})
-	end
-
-	-- Hologram pylons.
-	for _, corner in
-		{ Vector3.new(-65, 0, -45), Vector3.new(65, 0, -45), Vector3.new(-65, 0, 45), Vector3.new(65, 0, 45) }
-	do
-		local base = origin + corner
-		cylinder(
-			model,
-			{ Name = "PylonBase", Color = Color3.fromRGB(50, 54, 70) },
-			1.5,
-			6,
-			CFrame.new(base + Vector3.new(0, 0.75, 0))
-		)
-		local holo = cylinder(model, {
-			Name = "Hologram",
-			Color = colors.Accent,
-			Material = Enum.Material.Neon,
-			Transparency = 0.55,
-			CanCollide = false,
-			Studs = false,
-		}, 16, 3, CFrame.new(base + Vector3.new(0, 9.5, 0)))
-		addLight(holo, colors.Accent, 20, 2)
-	end
-end
-
-function Themes.Cosmic(model: Model, dojo)
-	local origin, size, colors = dojo.Origin, dojo.Size, dojo.Colors
-	buildWalls(model, dojo, true)
-
-	-- Neon trim around the floating platform.
-	local halfX, halfZ = size.X / 2, size.Z / 2
-	for _, edge in
-		{
-			{ Vector3.new(0, 0, -halfZ), Vector3.new(size.X, 0.6, 0.6) },
-			{ Vector3.new(0, 0, halfZ), Vector3.new(size.X, 0.6, 0.6) },
-			{ Vector3.new(-halfX, 0, 0), Vector3.new(0.6, 0.6, size.Z) },
-			{ Vector3.new(halfX, 0, 0), Vector3.new(0.6, 0.6, size.Z) },
-		}
-	do
-		part(model, {
-			Name = "EdgeGlow",
-			Size = edge[2],
-			CFrame = CFrame.new(origin + edge[1] + Vector3.new(0, 0.3, 0)),
-			Color = colors.Trim,
-			Material = Enum.Material.Neon,
-			Studs = false,
-		})
-	end
-
-	-- Stepped rock underside so the platform reads as floating.
-	for depth = 1, 3 do
-		part(model, {
-			Name = "Underside",
-			Size = Vector3.new(size.X - depth * 24, 6, size.Z - depth * 20),
-			CFrame = CFrame.new(origin + Vector3.new(0, -2 - depth * 6 + 3, 0)),
-			Color = Color3.fromRGB(46 - depth * 6, 34 - depth * 4, 70 - depth * 8),
-		})
-	end
-
-	-- Floating stud asteroids.
-	local rng = Random.new(42)
-	for _ = 1, 26 do
-		local angle = rng:NextNumber(0, math.pi * 2)
-		local distance = rng:NextNumber(120, 220)
-		local s = rng:NextNumber(3, 12)
-		part(model, {
-			Name = "Asteroid",
-			Size = Vector3.new(s, s * rng:NextNumber(0.6, 1), s * rng:NextNumber(0.6, 1)),
-			CFrame = CFrame.new(
-				origin + Vector3.new(math.cos(angle) * distance, rng:NextNumber(-40, 60), math.sin(angle) * distance)
-			) * CFrame.Angles(rng:NextNumber(0, 6), rng:NextNumber(0, 6), rng:NextNumber(0, 6)),
-			Color = Color3.fromRGB(rng:NextInteger(60, 100), rng:NextInteger(50, 80), rng:NextInteger(90, 140)),
-		})
-	end
-
-	-- Giant ringed planet on the horizon.
-	part(model, {
-		Name = "HorizonPlanet",
-		Shape = Enum.PartType.Ball,
-		Size = Vector3.new(150, 150, 150),
-		CFrame = CFrame.new(origin + Vector3.new(-120, 70, 420)),
-		Color = Color3.fromRGB(150, 80, 220),
-		CanCollide = false,
-	})
-	cylinder(model, {
-		Name = "HorizonRing",
-		Color = colors.Accent,
-		Material = Enum.Material.Neon,
-		Transparency = 0.35,
-		CanCollide = false,
-		Studs = false,
-	}, 1, 260, CFrame.new(origin + Vector3.new(-120, 70, 420)) * CFrame.Angles(math.rad(18), 0, math.rad(12)))
-
-	-- Drifting star field.
-	local starEmitterPart = part(model, {
-		Name = "StarField",
-		Size = Vector3.new(500, 1, 500),
-		CFrame = CFrame.new(origin + Vector3.new(0, 140, 0)),
+-- Floating sign (BillboardGui on an invisible anchor). Lines are stacked top to bottom.
+local function billboard(
+	parent: Instance,
+	position: Vector3,
+	width: number,
+	height: number,
+	lines: { Line },
+	maxDistance: number?
+): Part
+	local anchor = box(parent, "Sign", Vector3.new(1, 1, 1), position, WHITE, {
 		Transparency = 1,
 		CanCollide = false,
 		CanQuery = false,
+		CanTouch = false,
 		Studs = false,
 	})
-	local stars = Instance.new("ParticleEmitter")
-	stars.Texture = Config.Assets.Particles.Sparkle
-	stars.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 170, 255))
-	stars.LightEmission = 1
-	stars.Size = NumberSequence.new(1.2)
-	stars.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 1),
-		NumberSequenceKeypoint.new(0.3, 0.1),
-		NumberSequenceKeypoint.new(1, 1),
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "Info"
+	gui.Size = UDim2.new(width, 0, height, 0)
+	gui.MaxDistance = maxDistance or 140
+	gui.LightInfluence = 0
+	gui.Parent = anchor
+
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	layout.Parent = gui
+
+	for order, line in lines do
+		textLabel(gui, line.Name, line.Text, line.Color, line.Height, order, line.Font)
+	end
+	return anchor
+end
+
+-- Text painted on one face of a part.
+local function surfaceText(target: BasePart, face: Enum.NormalId, lines: { Line }, pixelsPerStud: number?)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Text"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = pixelsPerStud or 30
+	gui.LightInfluence = 0
+	gui.MaxDistance = 400
+	gui.Parent = target
+
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Parent = gui
+
+	for order, line in lines do
+		textLabel(gui, line.Name, line.Text, line.Color, line.Height, order, line.Font or Enum.Font.LuckiestGuy)
+	end
+	return gui
+end
+
+-- Checkerboard of studded tiles covering [minX, maxX] x [minZ, maxZ] with its top at `top`.
+local function checker(
+	parent: Instance,
+	name: string,
+	minX: number,
+	maxX: number,
+	minZ: number,
+	maxZ: number,
+	tile: number,
+	top: number,
+	colors: { Color3 },
+	thickness: number?
+)
+	local depth = thickness or 2
+	local ix = 0
+	for x = minX, maxX - 0.01, tile do
+		local iz = 0
+		local width = math.min(tile, maxX - x)
+		for z = minZ, maxZ - 0.01, tile do
+			local length = math.min(tile, maxZ - z)
+			box(
+				parent,
+				name,
+				Vector3.new(width, depth, length),
+				Vector3.new(x + width / 2, top - depth / 2, z + length / 2),
+				colors[(ix + iz) % 2 + 1]
+			)
+			iz += 1
+		end
+		ix += 1
+	end
+end
+
+-- Chunky stud tree: trunk + two leaf cubes.
+local function tree(parent: Instance, position: Vector3, trunkColor: Color3, leafColor: Color3, size: number)
+	local trunkHeight = size * 1.1
+	box(
+		parent,
+		"Trunk",
+		Vector3.new(size * 0.35, trunkHeight, size * 0.35),
+		position + Vector3.new(0, trunkHeight / 2, 0),
+		trunkColor
+	)
+	box(
+		parent,
+		"Leaves",
+		Vector3.new(size, size * 0.8, size),
+		position + Vector3.new(0, trunkHeight + size * 0.3, 0),
+		leafColor
+	)
+	box(
+		parent,
+		"Leaves",
+		Vector3.new(size * 0.7, size * 0.6, size * 0.7),
+		position + Vector3.new(size * 0.12, trunkHeight + size * 0.95, -size * 0.1),
+		shade(leafColor, 1.08)
+	)
+end
+
+-- Checkered cliff column (2 layers + grass cap) like the stud hills in the reference.
+local function cliffColumn(
+	parent: Instance,
+	position: Vector3,
+	size: number,
+	layerHeight: number,
+	colors: { Color3 },
+	cap: Color3,
+	parity: number
+)
+	for layer = 0, 1 do
+		box(
+			parent,
+			"Cliff",
+			Vector3.new(size, layerHeight, size),
+			position + Vector3.new(0, layerHeight * (layer + 0.5), 0),
+			colors[(parity + layer) % 2 + 1]
+		)
+	end
+	box(parent, "CliffTop", Vector3.new(size, 3, size), position + Vector3.new(0, layerHeight * 2 + 1.5, 0), cap)
+end
+
+local function arch(
+	parent: Instance,
+	centerZ: number,
+	halfWidth: number,
+	height: number,
+	postColor: Color3,
+	beamColor: Color3,
+	lines: { Line },
+	x: number?
+)
+	local cx = x or 0
+	for _, side in { -1, 1 } do
+		box(
+			parent,
+			"ArchPost",
+			Vector3.new(3, height, 3),
+			Vector3.new(cx + side * halfWidth, height / 2, centerZ),
+			postColor
+		)
+	end
+	local beam =
+		box(parent, "ArchBeam", Vector3.new(halfWidth * 2 + 6, 6, 3), Vector3.new(cx, height + 3, centerZ), beamColor)
+	surfaceText(beam, Enum.NormalId.Front, lines, 24)
+	surfaceText(beam, Enum.NormalId.Back, lines, 24)
+	return beam
+end
+
+--------------------------------------------------------------------------------
+-- Hub ground, plazas, cliffs, decor
+--------------------------------------------------------------------------------
+
+local function buildGround(root: Instance)
+	local ground = folder(root, "Ground", "Model")
+	checker(ground, "Grass", HUB.MinX, HUB.MaxX, HUB.MinZ, HUB.MaxZ, GROUND_TILE, 0, GRASS)
+
+	local plazas = folder(root, "Plazas", "Model")
+	-- Spawn + lane plazas, item plaza, egg plaza.
+	checker(plazas, "Stone", -48, 48, -64, 32, 16, 0.4, STONE, 0.6)
+	checker(plazas, "Stone", -32, 32, 32, 80, 16, 0.4, STONE, 0.6)
+	checker(plazas, "Stone", 56, 232, -32, 64, 16, 0.4, STONE, 0.6)
+	checker(plazas, "Stone", -80, 96, -136, -72, 16, 0.4, STONE, 0.6)
+	-- Walkways: east-west in front of the zones / items, north-south to the eggs.
+	checker(plazas, "Path", -352, -48, -48, -32, 16, 0.4, STONE, 0.6)
+	checker(plazas, "Path", 48, 240, -48, -32, 16, 0.4, STONE, 0.6)
+	checker(plazas, "Path", -16, 16, -72, -64, 16, 0.4, STONE, 0.6)
+end
+
+local function buildCliffs(root: Instance)
+	local cliffs = folder(root, "Cliffs", "Model")
+	local size, layer = 32, 16
+	local parity = 0
+	local function column(x: number, z: number)
+		parity += 1
+		cliffColumn(cliffs, Vector3.new(x, 0, z), size, layer, CLIFF, GRASS[1], parity)
+	end
+	-- South and north edges (north leaves the lane corridor open).
+	for x = HUB.MinX - size / 2, HUB.MaxX + size / 2, size do
+		column(x, HUB.MinZ - size / 2)
+		if math.abs(x) >= 160 then
+			column(x, HUB.MaxZ + size / 2)
+		end
+	end
+	-- West and east edges.
+	for z = HUB.MinZ + size / 2, HUB.MaxZ - size / 2, size do
+		column(HUB.MinX - size / 2, z)
+		column(HUB.MaxX + size / 2, z)
+	end
+end
+
+local function buildDecor(root: Instance)
+	local decor = folder(root, "Decor", "Model")
+	local trunk, leaves = Color3.fromRGB(176, 120, 70), Color3.fromRGB(130, 230, 70)
+	for _, position in
+		{
+			Vector3.new(-60, 0, -20),
+			Vector3.new(60, 0, 14),
+			Vector3.new(-56, 0, 50),
+			Vector3.new(44, 0, 60),
+			Vector3.new(-100, 0, -120),
+			Vector3.new(-180, 0, -100),
+			Vector3.new(-260, 0, -130),
+			Vector3.new(-330, 0, -60),
+			Vector3.new(-330, 0, 50),
+			Vector3.new(140, 0, -110),
+			Vector3.new(200, 0, -140),
+			Vector3.new(236, 0, 74),
+			Vector3.new(120, 0, -76),
+			Vector3.new(-120, 0, -150),
+		}
+	do
+		tree(decor, position, trunk, leaves, 10)
+	end
+	-- Light stud boulders.
+	local rng = Random.new(7)
+	for index = 1, 14 do
+		-- Keep clear of the leaderboards in the middle.
+		local x = if index % 2 == 0 then rng:NextNumber(HUB.MinX + 20, -120) else rng:NextNumber(120, HUB.MaxX - 20)
+		local z = rng:NextNumber(-170, -140)
+		local s = rng:NextNumber(4, 9)
+		box(decor, "Rock", Vector3.new(s * 1.4, s, s), Vector3.new(x, s / 2, z), STONE[2])
+	end
+	-- Welcome sign behind spawn.
+	local board =
+		box(decor, "WelcomeBoard", Vector3.new(34, 14, 1.5), Vector3.new(0, 11, -62), Color3.fromRGB(176, 120, 70))
+	box(decor, "WelcomePostL", Vector3.new(2, 11, 2), Vector3.new(-15, 5.5, -62), Color3.fromRGB(150, 98, 56))
+	box(decor, "WelcomePostR", Vector3.new(2, 11, 2), Vector3.new(15, 5.5, -62), Color3.fromRGB(150, 98, 56))
+	surfaceText(board, Enum.NormalId.Back, {
+		{ Name = "Title", Text = "+1 KUNG FU CHOP!", Color = Color3.fromRGB(255, 210, 60), Height = 0.55 },
+		{ Name = "Hint", Text = "Train → Smash the wall → Win!", Color = WHITE, Height = 0.3 },
+	}, 30)
+end
+
+--------------------------------------------------------------------------------
+-- Spawn
+--------------------------------------------------------------------------------
+
+local function buildSpawn(root: Instance)
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "HubSpawn"
+	spawn.Anchored = true
+	spawn.Neutral = true
+	spawn.Duration = 0
+	spawn.Size = Vector3.new(12, 1, 12)
+	-- Rotated so players spawn facing the lane (+Z).
+	spawn.CFrame = CFrame.new(SPAWN_POSITION) * CFrame.Angles(0, math.pi, 0)
+	spawn.Color = Color3.fromRGB(255, 200, 40)
+	spawn.Material = Enum.Material.Plastic
+	StudSurface.Apply(spawn)
+	spawn.Parent = root
+end
+
+--------------------------------------------------------------------------------
+-- Training zones (right side)
+--------------------------------------------------------------------------------
+
+local function zoneStatus(zone): (string, Color3)
+	if zone.Pass then
+		local pass = Config.Monetization.GamePasses[zone.Pass]
+		return `R$ {pass and pass.Price or "?"}`, Color3.fromRGB(120, 255, 120)
+	elseif (zone.RequiredRebirths or 0) > 0 then
+		return `🔒 🌀 {zone.RequiredRebirths} Rebirths`, Color3.fromRGB(255, 90, 90)
+	end
+	return "UNLOCKED", Color3.fromRGB(120, 255, 120)
+end
+
+local function dummy(parent: Instance, position: Vector3, color: Color3)
+	box(parent, "DummyBase", Vector3.new(3, 0.6, 3), position + Vector3.new(0, 0.3, 0), shade(color, 0.7))
+	box(parent, "DummyPost", Vector3.new(1.6, 6, 1.6), position + Vector3.new(0, 3.6, 0), color)
+	box(parent, "DummyHead", Vector3.new(2, 1.6, 2), position + Vector3.new(0, 7.4, 0), shade(color, 1.1))
+	for _, y in { 5.4, 3.6 } do
+		box(parent, "DummyArm", Vector3.new(0.5, 0.5, 3), position + Vector3.new(0, y, -1.6), shade(color, 0.85))
+	end
+end
+
+local function buildZone(zonesFolder: Instance, zone, index: number)
+	local model = folder(zonesFolder, "Zone_" .. zone.Id, "Model")
+	model:SetAttribute("ZoneId", zone.Id)
+
+	local cx = ZONE.FirstX - (index - 1) * ZONE.Spacing
+	local width, length = ZONE.Width, ZONE.Length
+	local cz = ZONE.MinZ + length / 2
+
+	box(model, "Floor", Vector3.new(width, 0.8, length), Vector3.new(cx, 0.4, cz), zone.Floor)
+	-- Raised border.
+	for _, side in { -1, 1 } do
+		box(model, "Border", Vector3.new(2, 1.6, length), Vector3.new(cx + side * (width / 2 - 1), 0.8, cz), zone.Trim)
+		box(model, "Border", Vector3.new(width, 1.6, 2), Vector3.new(cx, 0.8, cz + side * (length / 2 - 1)), zone.Trim)
+	end
+	-- Centre pool (water / lava / neon) like the training ponds in the reference.
+	local poolMaterial = if zone.Id == "Lava" or zone.Id == "Cosmic"
+		then Enum.Material.Neon
+		else Enum.Material.SmoothPlastic
+	box(model, "Pool", Vector3.new(10, 0.3, length - 14), Vector3.new(cx, 0.9, cz + 2), zone.Accent, {
+		Material = poolMaterial,
+		Transparency = if poolMaterial == Enum.Material.Neon then 0.1 else 0.15,
+		Studs = false,
 	})
-	stars.Lifetime = NumberRange.new(8, 14)
-	stars.Rate = 40
-	stars.Speed = NumberRange.new(2, 6)
-	stars.EmissionDirection = Enum.NormalId.Bottom
-	stars.Parent = starEmitterPart
+	-- Training dummies on both sides of the pool.
+	for _, side in { -1, 1 } do
+		for row = 0, 2 do
+			dummy(model, Vector3.new(cx + side * 9, 0.8, ZONE.MinZ + 18 + row * 26), shade(zone.Trim, 1.15))
+		end
+	end
+	-- Entrance arch + sign.
+	local status, statusColor = zoneStatus(zone)
+	arch(model, ZONE.MinZ - 1, 12, 12, zone.Trim, shade(zone.Floor, 0.9), {
+		{ Name = "Title", Text = string.upper(zone.Name), Color = WHITE, Height = 0.9 },
+	}, cx)
+	billboard(model, Vector3.new(cx, 22, ZONE.MinZ - 1), 14, 5, {
+		{
+			Name = "Multiplier",
+			Text = `{NumberFormat.Multiplier(zone.Multiplier)} STRENGTH`,
+			Color = Color3.fromRGB(255, 220, 70),
+			Height = 0.5,
+			Font = Enum.Font.LuckiestGuy,
+		},
+		{ Name = "Status", Text = status, Color = statusColor, Height = 0.4 },
+	})
+
+	-- Invisible volume used to detect who is training here.
+	box(model, "Area", Vector3.new(width, 24, length), Vector3.new(cx, 12, cz), WHITE, {
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		Studs = false,
+	})
 end
 
 --------------------------------------------------------------------------------
--- Build
+-- Hand item pedestals (left side)
 --------------------------------------------------------------------------------
 
-local function buildDojo(root: Instance, dojo)
-	local model = Instance.new("Model")
-	model.Name = dojo.Id
-	model:SetAttribute("DojoId", dojo.Id)
+local function buildPedestal(itemsFolder: Instance, item, slot: number, premium: boolean)
+	local model = folder(itemsFolder, "Item_" .. item.Id, "Model")
+	model:SetAttribute("ItemId", item.Id)
 
-	buildFloor(model, dojo)
-	local theme = Themes[dojo.Id] or Themes.Starter
-	theme(model, dojo)
+	local column = (slot - 1) % ITEMS.PerRow
+	local row = math.floor((slot - 1) / ITEMS.PerRow)
+	local position = Vector3.new(ITEMS.FirstX + column * ITEMS.Spacing, 0.4, ITEMS.FirstZ + row * ITEMS.RowSpacing)
 
-	local standsFolder = Instance.new("Folder")
-	standsFolder.Name = "Stands"
-	standsFolder.Parent = model
-
-	local count = #dojo.Objects
-	for index, objectId in dojo.Objects do
-		local x = (index - (count + 1) / 2) * STAND_SPACING
-		local standCFrame = CFrame.new(dojo.Origin + Vector3.new(x, 0, STAND_ROW_Z))
-		BreakableBuilder.Build(`{dojo.Id}_{objectId}`, objectId, dojo.Id, standCFrame, dojo.Colors, standsFolder)
+	local baseColor = if premium then Color3.fromRGB(200, 40, 40) else STONE[2]
+	local topColor = if premium then Color3.fromRGB(255, 190, 40) else STONE[1]
+	box(model, "Base", Vector3.new(12, 1.2, 12), position + Vector3.new(0, 0.6, 0), baseColor)
+	box(model, "Top", Vector3.new(9, 1, 9), position + Vector3.new(0, 1.7, 0), topColor)
+	if premium then
+		box(
+			model,
+			"Glow",
+			Vector3.new(9.4, 0.3, 9.4),
+			position + Vector3.new(0, 1.3, 0),
+			Color3.fromRGB(255, 220, 80),
+			{
+				Material = Enum.Material.Neon,
+				Studs = false,
+			}
+		)
 	end
 
-	if dojo.Id == Config.Dojos[1].Id then
-		local spawn = Instance.new("SpawnLocation")
-		spawn.Name = "DojoSpawn"
-		spawn.Anchored = true
-		spawn.Neutral = true
-		spawn.Duration = 0
-		spawn.Size = Vector3.new(8, 0.6, 8)
-		spawn.CFrame = CFrame.new(dojo.Origin + Vector3.new(0, 0.5, ARRIVAL_Z))
-		spawn.Color = dojo.Colors.Trim
-		spawn.Material = Enum.Material.Plastic
-		StudSurface.Apply(spawn)
-		spawn.Parent = model
-	end
+	local display = ItemModels.Build(item)
+	display.Name = "Display"
+	display:PivotTo(CFrame.new(position + Vector3.new(0, 6, 0)) * CFrame.Angles(0, 0, math.rad(-12)))
+	display.Parent = model
 
-	model.Parent = root
-	return model
+	local lines: { Line } = {}
+	if premium then
+		table.insert(
+			lines,
+			{ Name = "Tagline", Text = "ALWAYS 125% BETTER", Color = Color3.fromRGB(255, 120, 230), Height = 0.24 }
+		)
+		table.insert(lines, {
+			Name = "Bonus",
+			Text = string.upper(item.Name),
+			Color = Color3.fromRGB(255, 210, 60),
+			Height = 0.3,
+			Font = Enum.Font.LuckiestGuy,
+		})
+		local pass = Config.Monetization.GamePasses[item.Pass]
+		table.insert(lines, {
+			Name = "Requirement",
+			Text = `R$ {pass and pass.Price or "?"}`,
+			Color = Color3.fromRGB(120, 255, 120),
+			Height = 0.24,
+		})
+	else
+		table.insert(lines, {
+			Name = "Status",
+			Text = if item.Wins == 0 then "UNLOCKED" else "LOCKED",
+			Color = if item.Wins == 0 then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 90, 90),
+			Height = 0.22,
+		})
+		table.insert(lines, {
+			Name = "Bonus",
+			Text = `+{NumberFormat.Abbreviate(item.Bonus)} Strength`,
+			Color = WHITE,
+			Height = 0.36,
+			Font = Enum.Font.LuckiestGuy,
+		})
+		table.insert(lines, {
+			Name = "Requirement",
+			Text = `{NumberFormat.Abbreviate(item.Wins)} Wins`,
+			Color = Color3.fromRGB(255, 210, 60),
+			Height = 0.26,
+		})
+	end
+	billboard(model, position + Vector3.new(0, 12.5, 0), 11, 4.5, lines, 90)
 end
 
--- Builds every dojo into a new "Dojos" folder under `parent` and returns it.
+--------------------------------------------------------------------------------
+-- Eggs, showcase pet, leaderboards
+--------------------------------------------------------------------------------
+
+local EGG_POSITIONS = {
+	Common = Vector3.new(-60, 0.4, -94),
+	Uncommon = Vector3.new(-32, 0.4, -106),
+	Rare = Vector3.new(32, 0.4, -106),
+	Legendary = Vector3.new(60, 0.4, -94),
+	Rainbow = Vector3.new(84, 0.4, -118),
+}
+
+local function buildEgg(eggsFolder: Instance, egg)
+	local position = EGG_POSITIONS[egg.Id] or Vector3.new(0, 0.4, -100)
+	local model = folder(eggsFolder, "Egg_" .. egg.Id, "Model")
+	model:SetAttribute("EggId", egg.Id)
+
+	local padColor = if egg.Rainbow then Color3.fromRGB(255, 90, 170) else Color3.fromRGB(40, 120, 200)
+	box(model, "Pad", Vector3.new(11, 1.2, 11), position + Vector3.new(0, 0.6, 0), padColor)
+	box(
+		model,
+		"PadGlow",
+		Vector3.new(11.6, 0.4, 11.6),
+		position + Vector3.new(0, 0.3, 0),
+		if egg.Rainbow then Color3.fromRGB(255, 120, 230) else Color3.fromRGB(60, 220, 255),
+		{
+			Material = Enum.Material.Neon,
+			Studs = false,
+		}
+	)
+	box(model, "Egg", Vector3.new(6, 7.5, 6), position + Vector3.new(0, 5.2, 0), egg.Color, {
+		Shape = Enum.PartType.Ball,
+		Material = Enum.Material.SmoothPlastic,
+		Studs = false,
+	})
+	if egg.Rainbow then
+		local colors = {
+			Color3.fromRGB(255, 80, 80),
+			Color3.fromRGB(255, 220, 60),
+			Color3.fromRGB(80, 220, 120),
+			Color3.fromRGB(80, 160, 255),
+		}
+		for index, color in colors do
+			box(model, "Band", Vector3.new(6.15, 0.7, 6.15), position + Vector3.new(0, 2.6 + index * 1.15, 0), color, {
+				Shape = Enum.PartType.Cylinder,
+				Material = Enum.Material.Neon,
+				Studs = false,
+				CFrame = CFrame.new(position + Vector3.new(0, 2.6 + index * 1.15, 0))
+					* CFrame.Angles(0, 0, math.rad(90)),
+				Size = Vector3.new(0.7, 5.6 - math.abs(index - 2.5) * 0.6, 5.6 - math.abs(index - 2.5) * 0.6),
+			})
+		end
+	end
+
+	local price = if egg.Cost
+		then `🏆 {NumberFormat.Abbreviate(egg.Cost)} Wins`
+		else `R$ {Config.Monetization.Products[egg.Product].Price}`
+	billboard(model, position + Vector3.new(0, 12.5, 0), 10, 3.4, {
+		{
+			Name = "Title",
+			Text = string.upper(egg.Name),
+			Color = egg.Color,
+			Height = 0.55,
+			Font = Enum.Font.LuckiestGuy,
+		},
+		{ Name = "Price", Text = price, Color = Color3.fromRGB(255, 220, 90), Height = 0.4 },
+	})
+end
+
+local function buildShowcase(root: Instance)
+	local model = folder(root, "Showcase", "Model")
+	local position = Vector3.new(0, 0.4, -118)
+	box(model, "Base", Vector3.new(16, 1.6, 12), position + Vector3.new(0, 0.8, 0), Color3.fromRGB(200, 40, 40))
+	box(model, "Top", Vector3.new(13, 1.2, 9), position + Vector3.new(0, 2.2, 0), Color3.fromRGB(255, 190, 40))
+	box(model, "Glow", Vector3.new(16.4, 0.4, 12.4), position + Vector3.new(0, 1.7, 0), Color3.fromRGB(255, 230, 90), {
+		Material = Enum.Material.Neon,
+		Studs = false,
+	})
+	local pet = PetModels.Build("LionKing", 2.2)
+	pet.Name = "Pet"
+	pet:PivotTo(CFrame.new(position + Vector3.new(0, 6.3, 0)) * CFrame.Angles(0, math.pi, 0))
+	pet.Parent = model
+
+	local pass = Config.Monetization.GamePasses.LionKing
+	billboard(model, position + Vector3.new(0, 15, 0), 12, 5, {
+		{
+			Name = "Best",
+			Text = "BEST IN GAME",
+			Color = Color3.fromRGB(255, 70, 90),
+			Height = 0.3,
+			Font = Enum.Font.LuckiestGuy,
+		},
+		{ Name = "Tagline", Text = "Always 1000% Better", Color = Color3.fromRGB(255, 220, 60), Height = 0.28 },
+		{
+			Name = "Price",
+			Text = `{pass.Name} • R$ {pass.Price}`,
+			Color = Color3.fromRGB(120, 255, 120),
+			Height = 0.24,
+		},
+	})
+end
+
+local function buildLeaderboards(root: Instance)
+	local boards = folder(root, "Leaderboards")
+	local frameColor = Color3.fromRGB(230, 150, 60)
+	for index, def in Config.Leaderboards.Boards do
+		local x = (index - 2) * 80
+		local center = Vector3.new(x, 18, -156)
+		local model = folder(boards, def.Id, "Model")
+		box(model, "Panel", Vector3.new(40, 28, 1.5), center, Color3.fromRGB(40, 140, 70))
+		box(model, "FrameTop", Vector3.new(44, 3, 3), center + Vector3.new(0, 15.5, 0), frameColor)
+		box(model, "FrameBottom", Vector3.new(44, 3, 3), center + Vector3.new(0, -15.5, 0), frameColor)
+		for _, side in { -1, 1 } do
+			box(model, "FrameSide", Vector3.new(3, 34, 3), center + Vector3.new(side * 21.5, 0, 0), frameColor)
+			box(model, "Leg", Vector3.new(3, 4, 3), Vector3.new(x + side * 16, 0.4 + 2, -156), shade(frameColor, 0.8))
+		end
+		local panel = model:FindFirstChild("Panel") :: BasePart
+		panel:SetAttribute("BoardId", def.Id)
+		surfaceText(panel, Enum.NormalId.Back, {
+			{ Name = "Title", Text = `{def.Icon} {def.Title}`, Color = Color3.fromRGB(255, 220, 60), Height = 0.14 },
+			{ Name = "Hint", Text = "Global top 10 • updates every few minutes", Color = WHITE, Height = 0.06 },
+		}, 20)
+	end
+end
+
+--------------------------------------------------------------------------------
+-- The Board Wall lane
+--------------------------------------------------------------------------------
+
+local function buildLane(root: Instance)
+	local lane = folder(root, "Lane", "Model")
+	local laneConfig = Config.Lane
+	local pad = laneConfig.PadPosition
+	local halfWidth = laneConfig.Width / 2
+	local wallCount = Formulas.GetWallCount()
+	local laneEndZ = Formulas.GetWallZ(wallCount) + laneConfig.FinishOvershoot + 26
+
+	-- Launch pad.
+	local launchPad = box(
+		lane,
+		"LaunchPad",
+		Vector3.new(1.2, laneConfig.PadRadius * 2, laneConfig.PadRadius * 2),
+		pad,
+		Color3.fromRGB(255, 200, 40),
+		{
+			Shape = Enum.PartType.Cylinder,
+			CFrame = CFrame.new(pad + Vector3.new(0, 0.6, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		}
+	)
+	launchPad:SetAttribute("Radius", laneConfig.PadRadius)
+	box(
+		lane,
+		"PadRing",
+		Vector3.new(0.4, laneConfig.PadRadius * 2 + 1.5, laneConfig.PadRadius * 2 + 1.5),
+		pad,
+		Color3.fromRGB(255, 80, 60),
+		{
+			Shape = Enum.PartType.Cylinder,
+			Material = Enum.Material.Neon,
+			Studs = false,
+			CFrame = CFrame.new(pad + Vector3.new(0, 0.3, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		}
+	)
+	billboard(lane, pad + Vector3.new(0, 9, 0), 16, 4, {
+		{
+			Name = "Title",
+			Text = "🥋 SMASH THE WALL!",
+			Color = Color3.fromRGB(255, 220, 60),
+			Height = 0.55,
+			Font = Enum.Font.LuckiestGuy,
+		},
+		{ Name = "Hint", Text = "Stand here and press SMASH", Color = WHITE, Height = 0.35 },
+	})
+
+	local walls = folder(lane, "Walls")
+	local decor = folder(lane, "Decor", "Model")
+	for biomeIndex, biome in Config.Biomes do
+		local startZ = if biomeIndex == 1
+			then HUB.MaxZ
+			else Formulas.GetWallZ((biomeIndex - 1) * laneConfig.WallsPerBiome + 1) - laneConfig.WallSpacing / 2
+		local endZ = if biomeIndex == #Config.Biomes
+			then laneEndZ
+			else Formulas.GetWallZ(biomeIndex * laneConfig.WallsPerBiome + 1) - laneConfig.WallSpacing / 2
+
+		-- Lane floor stripes, rails, side ground and cliffs.
+		local stripe = 0
+		for z = startZ, endZ - 0.01, laneConfig.WallSpacing do
+			local length = math.min(laneConfig.WallSpacing, endZ - z)
+			box(
+				decor,
+				"LaneFloor",
+				Vector3.new(laneConfig.Width, 1, length),
+				Vector3.new(0, -0.5, z + length / 2),
+				shade(biome.Ground[stripe % 2 + 1], 0.92)
+			)
+			stripe += 1
+		end
+		local railIndex = 0
+		for z = startZ, endZ - 0.01, 32 do
+			local length = math.min(32, endZ - z)
+			for _, side in { -1, 1 } do
+				box(
+					decor,
+					"Rail",
+					Vector3.new(4, 3, length),
+					Vector3.new(side * (halfWidth + 2), 1.5, z + length / 2),
+					biome.Rail[(railIndex + (side + 1) / 2) % 2 + 1]
+				)
+			end
+			railIndex += 1
+		end
+		for _, side in { -1, 1 } do
+			checker(
+				decor,
+				"SideGround",
+				if side < 0 then -120 else 24,
+				if side < 0 then -24 else 120,
+				startZ,
+				endZ,
+				32,
+				0,
+				biome.Ground
+			)
+			local parity = biomeIndex
+			for z = startZ + 16, endZ - 16, 32 do
+				parity += 1
+				cliffColumn(
+					decor,
+					Vector3.new(side * 136, 0, z),
+					32,
+					14,
+					{ shade(biome.Rail[1], 0.85), shade(biome.Rail[2], 0.85) },
+					biome.Ground[1],
+					parity
+				)
+			end
+			for z = startZ + 24, endZ - 24, 64 do
+				local offset = if (z // 64) % 2 == 0 then 48 else 82
+				tree(decor, Vector3.new(side * offset, 0, z + side * 12), biome.Tree.Trunk, biome.Tree.Leaves, 9)
+			end
+		end
+
+		-- Biome entrance arch with its name (faces the runner).
+		arch(decor, startZ + 4, halfWidth + 4, 22, biome.Rail[1], shade(biome.Rail[2], 0.9), {
+			{ Name = "Title", Text = string.upper(biome.Name), Color = biome.Title, Height = 0.6 },
+			{ Name = "Wins", Text = `🏆 {biome.WinsPerWall} per wall`, Color = WHITE, Height = 0.3 },
+		})
+	end
+
+	-- The walls: three stacked boards each, with the Strength needed painted on the front.
+	local plankHeight = laneConfig.WallHeight / 3
+	for index = 1, wallCount do
+		local biome = Formulas.GetBiome(Formulas.GetWallBiomeIndex(index))
+		local z = Formulas.GetWallZ(index)
+		local wall = folder(walls, "Wall_" .. index, "Model")
+		wall:SetAttribute("Index", index)
+		wall:SetAttribute("Toughness", Formulas.GetWallToughness(index))
+		for plank = 1, 3 do
+			local board = box(
+				wall,
+				"Board",
+				Vector3.new(laneConfig.Width - 0.4, plankHeight - 0.15, 1.6),
+				Vector3.new(0, plankHeight * (plank - 0.5), z),
+				biome.Wall[(plank + index) % 2 + 1],
+				{
+					Material = biome.WallMaterial,
+					Transparency = if biome.WallMaterial == Enum.Material.Glass then 0.15 else 0,
+				}
+			)
+			if plank == 2 then
+				surfaceText(board, Enum.NormalId.Front, {
+					{
+						Name = "Toughness",
+						Text = `⚡ {NumberFormat.Abbreviate(Formulas.GetWallToughness(index))}`,
+						Color = WHITE,
+						Height = 0.9,
+					},
+				}, 12)
+			end
+		end
+		if biome.WallAccent then
+			box(
+				wall,
+				"Accent",
+				Vector3.new(laneConfig.Width - 0.4, 0.4, 1.7),
+				Vector3.new(0, plankHeight * 1.5 + plankHeight / 2 - 0.1, z),
+				biome.WallAccent,
+				{
+					Material = Enum.Material.Neon,
+					Studs = false,
+				}
+			)
+		end
+	end
+
+	-- Distance markers on the left rail every 200 studs.
+	for distance = 200, laneEndZ - pad.Z - 40, 200 do
+		local z = pad.Z + distance
+		local post = box(
+			decor,
+			"Marker",
+			Vector3.new(1, 8, 6),
+			Vector3.new(-(halfWidth + 2), 7, z),
+			Color3.fromRGB(255, 255, 255)
+		)
+		surfaceText(post, Enum.NormalId.Right, {
+			{ Name = "Distance", Text = `{distance} m`, Color = Color3.fromRGB(40, 40, 50), Height = 0.8 },
+		}, 20)
+	end
+
+	-- Finish platform.
+	local finishZ = Formulas.GetWallZ(wallCount) + laneConfig.FinishOvershoot + 10
+	box(
+		lane,
+		"Finish",
+		Vector3.new(laneConfig.Width, 1.2, 14),
+		Vector3.new(0, 0.6, finishZ),
+		Color3.fromRGB(255, 200, 40)
+	)
+	box(
+		lane,
+		"Trophy",
+		Vector3.new(4, 6, 4),
+		Vector3.new(0, 4.2, finishZ + 4),
+		Color3.fromRGB(255, 220, 60),
+		{ Material = Enum.Material.Neon, Studs = false }
+	)
+	arch(lane, finishZ + 8, halfWidth + 4, 22, Color3.fromRGB(255, 200, 40), Color3.fromRGB(200, 40, 40), {
+		{ Name = "Title", Text = "YOU BROKE THEM ALL!", Color = Color3.fromRGB(255, 220, 60), Height = 0.9 },
+	})
+end
+
+--------------------------------------------------------------------------------
+-- Public
+--------------------------------------------------------------------------------
+
+-- Builds the whole hub into a new "Map" folder under `parent` and returns it.
 function MapBuilder.Build(parent: Instance): Folder
 	local root = Instance.new("Folder")
 	root.Name = MapBuilder.ROOT_NAME
-	for _, dojo in Config.Dojos do
-		buildDojo(root, dojo)
-	end
-	root.Parent = parent
-	return root
-end
 
--- Where players appear when travelling to a dojo: above its ArrivalPad, facing the stands (+Z).
-function MapBuilder.GetArrivalCFrame(dojoModel: Instance): CFrame?
-	local pad = dojoModel:FindFirstChild(MapBuilder.ARRIVAL_PAD, true)
-	if not pad or not pad:IsA("BasePart") then
-		return nil
+	buildGround(root)
+	buildCliffs(root)
+	buildDecor(root)
+	buildSpawn(root)
+
+	local zones = folder(root, "TrainingZones")
+	for index, zone in Config.TrainingZones do
+		buildZone(zones, zone, index)
 	end
-	local position = pad.Position + Vector3.new(0, 3.3, 0)
-	return CFrame.lookAt(position, position + Vector3.zAxis)
+
+	local items = folder(root, "Items")
+	for slot, item in Config.HandItems do
+		buildPedestal(items, item, slot, false)
+	end
+	buildPedestal(items, Config.PremiumItem, #Config.HandItems + 1, true)
+
+	local eggs = folder(root, "Eggs")
+	for _, egg in Config.Eggs do
+		buildEgg(eggs, egg)
+	end
+	buildShowcase(root)
+	buildLeaderboards(root)
+	buildLane(root)
+
+	root.Parent = parent
+	return root :: Folder
 end
 
 --[[
 	Upgrades a map baked with the classic-stud fallback to the uploaded square-stud texture.
 	Runs automatically at server start; you can also run it in edit mode from the Command Bar:
-		require(game.ServerScriptService.Server.Modules.MapBuilder).ApplyStudTextures(workspace.Dojos)
+		require(game.ServerScriptService.Server.Modules.MapBuilder).ApplyStudTextures(workspace.Map)
 ]]
 function MapBuilder.ApplyStudTextures(root: Instance): number
 	if not StudSurface.HasTexture() then

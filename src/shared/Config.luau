@@ -1,13 +1,22 @@
 --[[
 	Config.luau
-	Every tunable number, color and asset reference for "Kung Fu Chop!" lives here.
-	Shared by server (authoritative math) and client (display / prediction).
+	Every tunable number, colour, layout coordinate and asset id for "+1 Kung Fu Chop!".
+	Shared by the server (authoritative math), the client (display) and the map baker.
+
+	Game loop (one big studded hub, like +1 Stone Skipping):
+	  1. Train  – chop in the training zones (right side). Every chop gives +Strength; standing in a
+	              zone also trains idly. Better zones unlock with rebirths or Robux.
+	  2. Smash  – step on the launch pad and charge down the Board Wall lane. You break every wall
+	              your Strength can handle; each broken wall pays Wins.
+	  3. Equip  – Wins unlock better hand wraps / gauntlets (left side) that add more per chop.
+	  4. Hatch  – spend Wins on eggs for pets that multiply your Strength.
+	  5. Rebirth – at max level, reset Strength for a permanent multiplier and new zones.
 ]]
 
 local Config = {}
 
-Config.GameName = "Kung Fu Chop!"
-Config.DataStoreName = "KungFuChop_PlayerData_v1"
+Config.GameName = "+1 Kung Fu Chop!"
+Config.DataStoreName = "KungFuChop_PlayerData_v2"
 
 --------------------------------------------------------------------------------
 -- Assets
@@ -15,24 +24,22 @@ Config.DataStoreName = "KungFuChop_PlayerData_v1"
 
 Config.Assets = {
 	-- Square stud tile (assets/textures/stud_overlay.png): the raised rounded-square studs with a
-	-- dark "L" bevel seen in Steal an Egg / Steal a Brainrot. Upload it with Studio's Asset Manager
+	-- dark "L" bevel seen in Steal an Egg / Stone Skipping. Upload it with Studio's Asset Manager
 	-- (Bulk Import), right-click → Copy Asset ID, and paste "rbxassetid://<id>" here (see README:
-	-- a *decal* id from the website is not the image id). The same
-	-- asset drives the UI panels and every 3D surface. Empty string = fallback (procedural square
-	-- studs in the UI, classic SurfaceType.Studs on parts) so the place still runs before uploading.
+	-- a *decal* id from the website is not the image id). The same asset drives the UI panels and
+	-- every 3D surface. Empty string = fallback (procedural square studs in the UI, classic
+	-- SurfaceType.Studs on parts) so the place still runs before uploading.
 	StudTexture = "",
 
 	-- Optional (assets/textures/checker_overlay.png): darkens alternating 4x4-stud squares on
-	-- floors, like the checkerboard ground in the reference games.
+	-- large floors. The hub ground is already built from checkered tiles, so this is a bonus.
 	CheckerTexture = "",
-	CheckerStudsPerTile = 8, -- the 2x2 checker image covers 8x8 studs → 4x4-stud squares
+	CheckerStudsPerTile = 8,
 
 	-- Exact tile size used for the "Steal an Egg" studded UI background.
 	StudTileSize = UDim2.new(0, 32, 0, 32),
-	-- How visible the stud overlay is on UI panels (0 = full strength, 1 = invisible).
-	StudImageTransparency = 0.15,
-	-- How visible the stud overlay Texture is on 3D parts (0 = full strength).
-	StudPartTransparency = 0,
+	StudImageTransparency = 0.15, -- UI stud overlay strength (0 = full)
+	StudPartTransparency = 0, -- 3D stud overlay strength (0 = full)
 
 	-- Optional uploaded karate-chop Animation (R15/R6). Empty = procedural Motor6D chop.
 	ChopAnimation = "",
@@ -55,585 +62,608 @@ Config.Assets = {
 }
 
 --------------------------------------------------------------------------------
--- Training (+1 loop)
+-- Training
 --------------------------------------------------------------------------------
 
 Config.Training = {
-	BasePower = 1, -- the "+1"
-	CritMultiplier = 3,
-	MaxCritChance = 0.75,
-
-	-- Client never sends chops faster than this (seconds).
-	ClientMinInterval = 0.1,
-	-- Server token bucket: excess chops are silently dropped.
-	ServerBucketCapacity = 14,
-	ServerBucketRefillPerSecond = 11,
-
-	AutoChopBaseInterval = 0.6,
-	AutoChopMinInterval = 0.2,
+	-- Manual chops (click / tap / CHOP button) are capped client-side to this interval.
+	ClientMinInterval = 0.15,
+	-- Server token bucket: excess chop requests are silently dropped.
+	ServerBucketCapacity = 10,
+	ServerBucketRefillPerSecond = 8,
+	-- Standing inside a training zone trains automatically every IdleInterval seconds.
+	IdleInterval = 1.25,
+	-- Auto Chop game pass: the client chops for you at this interval.
+	AutoChopInterval = 0.25,
 }
 
---------------------------------------------------------------------------------
--- Smashing
---------------------------------------------------------------------------------
-
-Config.Smash = {
-	-- Horizontal studs from the player to the edge of a breakable object.
-	Range = 9,
-	-- Extra leeway the server allows on top of Range (latency / movement).
-	RangeTolerance = 6,
-	DefaultRespawn = 3,
-}
-
---------------------------------------------------------------------------------
--- Belts & martial ranks (ordered; must be bought in sequence)
---------------------------------------------------------------------------------
-
-Config.Belts = {
+-- Training zones, laid out side by side on the right of the hub (see MapBuilder).
+-- Unlock with rebirths (RequiredRebirths) or a game pass (Pass).
+Config.TrainingZones = {
 	{
-		Id = "White",
-		Name = "White Belt",
+		Id = "Wooden",
+		Name = "Wooden Dojo",
 		Multiplier = 1,
-		RequiredPower = 0,
-		Cost = 0,
-		Color = Color3.fromRGB(245, 245, 245),
+		RequiredRebirths = 0,
+		Floor = Color3.fromRGB(226, 170, 96),
+		Trim = Color3.fromRGB(150, 98, 52),
+		Accent = Color3.fromRGB(110, 210, 255),
 	},
 	{
-		Id = "Yellow",
-		Name = "Yellow Belt",
-		Multiplier = 2,
-		RequiredPower = 100,
-		Cost = 50,
-		Color = Color3.fromRGB(255, 214, 51),
+		Id = "Bamboo",
+		Name = "Bamboo Garden",
+		Multiplier = 4,
+		RequiredRebirths = 2,
+		Floor = Color3.fromRGB(70, 200, 150),
+		Trim = Color3.fromRGB(30, 140, 100),
+		Accent = Color3.fromRGB(170, 255, 140),
 	},
 	{
-		Id = "Orange",
-		Name = "Orange Belt",
-		Multiplier = 3,
-		RequiredPower = 1_000,
-		Cost = 400,
-		Color = Color3.fromRGB(255, 140, 26),
-	},
-	{
-		Id = "Green",
-		Name = "Green Belt",
-		Multiplier = 5,
-		RequiredPower = 10_000,
-		Cost = 3_000,
-		Color = Color3.fromRGB(60, 200, 80),
-	},
-	{
-		Id = "Blue",
-		Name = "Blue Belt",
-		Multiplier = 7,
-		RequiredPower = 100_000,
-		Cost = 25_000,
-		Color = Color3.fromRGB(40, 120, 255),
-	},
-	{
-		Id = "Black",
-		Name = "Black Belt",
+		Id = "Waterfall",
+		Name = "Waterfall Shrine",
 		Multiplier = 10,
-		RequiredPower = 1_000_000,
-		Cost = 250_000,
-		Color = Color3.fromRGB(25, 25, 30),
-		Stripe = Color3.fromRGB(255, 200, 40),
+		RequiredRebirths = 4,
+		Floor = Color3.fromRGB(150, 110, 255),
+		Trim = Color3.fromRGB(100, 70, 200),
+		Accent = Color3.fromRGB(110, 230, 255),
 	},
 	{
-		Id = "DragonMaster",
-		Name = "Dragon Master",
-		Multiplier = 25,
-		RequiredPower = 50_000_000,
-		Cost = 5_000_000,
-		Color = Color3.fromRGB(255, 190, 30),
-		Stripe = Color3.fromRGB(220, 30, 30),
+		Id = "Lava",
+		Name = "Lava Pit",
+		Multiplier = 20,
+		RequiredRebirths = 6,
+		Floor = Color3.fromRGB(240, 240, 250),
+		Trim = Color3.fromRGB(200, 200, 215),
+		Accent = Color3.fromRGB(255, 110, 40),
+	},
+	{
+		Id = "Golden",
+		Name = "Golden Temple",
+		Multiplier = 30,
+		Pass = "GoldenZone",
+		Floor = Color3.fromRGB(70, 110, 220),
+		Trim = Color3.fromRGB(200, 70, 60),
+		Accent = Color3.fromRGB(255, 200, 60),
+	},
+	{
+		Id = "Dragon",
+		Name = "Dragon Sanctum",
+		Multiplier = 75,
+		Pass = "DragonZone",
+		Floor = Color3.fromRGB(255, 200, 40),
+		Trim = Color3.fromRGB(200, 140, 20),
+		Accent = Color3.fromRGB(255, 80, 60),
+	},
+	{
+		Id = "Cosmic",
+		Name = "Cosmic Dojo",
+		Multiplier = 200,
+		Pass = "CosmicZone",
+		Floor = Color3.fromRGB(24, 26, 34),
+		Trim = Color3.fromRGB(40, 255, 120),
+		Accent = Color3.fromRGB(40, 255, 120),
+	},
+}
+
+--------------------------------------------------------------------------------
+-- Hand items (the "shells" of Stone Skipping): unlocked by lifetime Wins, equip one.
+-- Bonus = Strength per chop before multipliers.
+--------------------------------------------------------------------------------
+
+Config.HandItems = {
+	{ Id = "BareFists", Name = "Bare Fists", Bonus = 1, Wins = 0, Color = Color3.fromRGB(234, 184, 146) },
+	{ Id = "ClothWraps", Name = "Cloth Wraps", Bonus = 3, Wins = 2, Color = Color3.fromRGB(245, 245, 240) },
+	{ Id = "LeatherWraps", Name = "Leather Wraps", Bonus = 5, Wins = 10, Color = Color3.fromRGB(150, 96, 60) },
+	{ Id = "TrainingGloves", Name = "Training Gloves", Bonus = 12, Wins = 40, Color = Color3.fromRGB(220, 50, 50) },
+	{ Id = "IronKnuckles", Name = "Iron Knuckles", Bonus = 30, Wins = 150, Color = Color3.fromRGB(140, 146, 160) },
+	{ Id = "BambooBracers", Name = "Bamboo Bracers", Bonus = 75, Wins = 500, Color = Color3.fromRGB(120, 200, 80) },
+	{ Id = "JadeGauntlets", Name = "Jade Gauntlets", Bonus = 200, Wins = 1_500, Color = Color3.fromRGB(40, 190, 130) },
+	{
+		Id = "GoldenGauntlets",
+		Name = "Golden Gauntlets",
+		Bonus = 500,
+		Wins = 4_500,
+		Color = Color3.fromRGB(255, 200, 40),
+	},
+	{
+		Id = "LavaFists",
+		Name = "Lava Fists",
+		Bonus = 1_250,
+		Wins = 14_000,
+		Color = Color3.fromRGB(255, 90, 30),
+		Glow = true,
+	},
+	{
+		Id = "FrostClaws",
+		Name = "Frost Claws",
+		Bonus = 3_500,
+		Wins = 40_000,
+		Color = Color3.fromRGB(120, 220, 255),
+		Glow = true,
+	},
+	{
+		Id = "ThunderFists",
+		Name = "Thunder Fists",
+		Bonus = 10_000,
+		Wins = 125_000,
+		Color = Color3.fromRGB(255, 240, 80),
+		Glow = true,
+	},
+	{
+		Id = "DragonClaws",
+		Name = "Dragon Claws",
+		Bonus = 30_000,
+		Wins = 400_000,
+		Color = Color3.fromRGB(220, 40, 60),
+		Glow = true,
+	},
+	{
+		Id = "VoidGauntlets",
+		Name = "Void Gauntlets",
+		Bonus = 100_000,
+		Wins = 1_250_000,
+		Color = Color3.fromRGB(140, 60, 255),
+		Glow = true,
+	},
+	{
+		Id = "CelestialPalms",
+		Name = "Celestial Palms",
+		Bonus = 300_000,
+		Wins = 4_000_000,
+		Color = Color3.fromRGB(255, 120, 230),
 		Glow = true,
 	},
 }
 
---------------------------------------------------------------------------------
--- Hand auras & gloves
---------------------------------------------------------------------------------
-
-local P = Config.Assets.Particles
-
-Config.Auras = {
-	{
-		Id = "FirePalms",
-		Name = "Fire Palms",
-		Description = "Blazing palms that scorch anything they touch.",
-		Cost = 1_000,
-		RequiredRebirths = 0,
-		PowerMultiplier = 1.5,
-		CritChance = 0.05,
-		Color = Color3.fromRGB(255, 110, 30),
-		Particle = {
-			Texture = P.Fire,
-			Colors = { Color3.fromRGB(255, 220, 80), Color3.fromRGB(255, 70, 20) },
-			Size = 0.9,
-			Rate = 35,
-			Speed = 2,
-			Lifetime = 0.6,
-		},
-	},
-	{
-		Id = "FrostFists",
-		Name = "Frost Fists",
-		Description = "Icy knuckles that freeze before they shatter.",
-		Cost = 12_000,
-		RequiredRebirths = 0,
-		PowerMultiplier = 2,
-		CritChance = 0.07,
-		Color = Color3.fromRGB(120, 220, 255),
-		Particle = {
-			Texture = P.Sparkle,
-			Colors = { Color3.fromRGB(230, 250, 255), Color3.fromRGB(90, 190, 255) },
-			Size = 0.6,
-			Rate = 30,
-			Speed = 1.5,
-			Lifetime = 0.8,
-		},
-	},
-	{
-		Id = "LightningHands",
-		Name = "Lightning Hands",
-		Description = "Crackling voltage for lightning-fast crits.",
-		Cost = 90_000,
-		RequiredRebirths = 1,
-		PowerMultiplier = 3,
-		CritChance = 0.1,
-		Color = Color3.fromRGB(255, 240, 70),
-		Particle = {
-			Texture = P.Sparkle,
-			Colors = { Color3.fromRGB(255, 255, 200), Color3.fromRGB(80, 160, 255) },
-			Size = 0.8,
-			Rate = 60,
-			Speed = 6,
-			Lifetime = 0.25,
-		},
-	},
-	{
-		Id = "JadeChi",
-		Name = "Jade Chi",
-		Description = "Ancient temple energy flows through your palms.",
-		Cost = 750_000,
-		RequiredRebirths = 2,
-		PowerMultiplier = 4,
-		CritChance = 0.12,
-		Color = Color3.fromRGB(60, 230, 140),
-		Particle = {
-			Texture = P.Smoke,
-			Colors = { Color3.fromRGB(180, 255, 210), Color3.fromRGB(30, 200, 110) },
-			Size = 1,
-			Rate = 25,
-			Speed = 1,
-			Lifetime = 1,
-		},
-	},
-	{
-		Id = "VoidBlades",
-		Name = "Void Blades",
-		Description = "Hands sharpened by the emptiness between stars.",
-		Cost = 8_000_000,
-		RequiredRebirths = 3,
-		PowerMultiplier = 6,
-		CritChance = 0.15,
-		Color = Color3.fromRGB(150, 60, 255),
-		Particle = {
-			Texture = P.Smoke,
-			Colors = { Color3.fromRGB(200, 120, 255), Color3.fromRGB(40, 0, 80) },
-			Size = 1.1,
-			Rate = 40,
-			Speed = 2.5,
-			Lifetime = 0.7,
-		},
-	},
-	{
-		Id = "GalaxyPalms",
-		Name = "Galaxy Palms",
-		Description = "Every chop carries the weight of a galaxy.",
-		Cost = 150_000_000,
-		RequiredRebirths = 6,
-		PowerMultiplier = 10,
-		CritChance = 0.2,
-		Color = Color3.fromRGB(255, 100, 220),
-		Particle = {
-			Texture = P.Sparkle,
-			Colors = { Color3.fromRGB(255, 140, 240), Color3.fromRGB(80, 120, 255) },
-			Size = 1,
-			Rate = 70,
-			Speed = 3,
-			Lifetime = 0.9,
-		},
-	},
+-- Game-pass item: always better than your best unlocked item.
+Config.PremiumItem = {
+	Id = "PhoenixRelic",
+	Name = "Phoenix Relic",
+	Pass = "PhoenixRelic",
+	BetterBy = 1.25, -- +125% over your best unlocked item
+	Color = Color3.fromRGB(255, 120, 30),
+	Glow = true,
 }
 
 --------------------------------------------------------------------------------
--- Coin upgrades
+-- The Board Wall lane (runs from the launch pad toward +Z)
 --------------------------------------------------------------------------------
 
-Config.Upgrades = {
-	{
-		Id = "IronPalms",
-		Name = "Iron Palms",
-		Icon = "✋",
-		Description = "+1 base power per chop",
-		BaseCost = 20,
-		CostGrowth = 1.45,
-		MaxLevel = 100,
-		PerLevel = 1,
-	},
-	{
-		Id = "Focus",
-		Name = "Inner Focus",
-		Icon = "🎯",
-		Description = "+1% critical chop chance",
-		BaseCost = 150,
-		CostGrowth = 1.6,
-		MaxLevel = 25,
-		PerLevel = 0.01,
-	},
-	{
-		Id = "Greed",
-		Name = "Golden Touch",
-		Icon = "🪙",
-		Description = "+10% coins from smashing",
-		BaseCost = 100,
-		CostGrowth = 1.55,
-		MaxLevel = 50,
-		PerLevel = 0.1,
-	},
-	{
-		Id = "Speed",
-		Name = "Swift Strikes",
-		Icon = "⚡",
-		Description = "Auto-Chop swings faster",
-		BaseCost = 250,
-		CostGrowth = 2.1,
-		MaxLevel = 10,
-		PerLevel = 0.04,
-	},
+Config.Lane = {
+	PadPosition = Vector3.new(0, 0, 70),
+	PadRadius = 12,
+	FirstWallZ = 110,
+	WallSpacing = 16,
+	WallsPerBiome = 25,
+	Width = 40,
+	WallHeight = 12,
+	FinishOvershoot = 30, -- studs past the last wall when everything is broken
+
+	-- Wall n needs BaseToughness * ToughnessGrowth^(n-1) Strength to break.
+	BaseToughness = 10,
+	ToughnessGrowth = 1.15,
+
+	-- Run timing (client animation length; the server blocks new runs until it ends).
+	MinDuration = 2.5,
+	MaxDuration = 11,
+	StudsPerSecond = 320,
+	Cooldown = 1.5,
 }
 
---------------------------------------------------------------------------------
--- Rebirths
---------------------------------------------------------------------------------
-
-Config.Rebirth = {
-	BaseCost = 10_000, -- Power needed for the first rebirth
-	CostGrowth = 5, -- each rebirth costs 5x more
-	MultiplierPerRebirth = 1, -- permanent power multiplier: 1 + rebirths * this
-	CoinBonusPerRebirth = 0.25, -- permanent coin multiplier: 1 + rebirths * this
-}
-
---------------------------------------------------------------------------------
--- Breakable objects
---	Shape: see server/Modules/Shapes.luau
---	Size: bounding box in studs; Grid: number of fracture segments along X/Y/Z
---	Stand: "Supports" | "Pedestal" | "Float"
---	Tier: drives camera shake / debris speed (1..5)
---------------------------------------------------------------------------------
-
-Config.Breakables = {
-	-- Starter Dojo -------------------------------------------------------------
-	WoodenBoard = {
-		Name = "Wooden Board",
-		RequiredPower = 50,
-		Coins = 5,
-		Respawn = 2.5,
-		Tier = 1,
-		Shape = "Box",
-		Size = Vector3.new(7, 0.8, 3),
-		Grid = Vector3.new(5, 1, 2),
-		Material = Enum.Material.Plastic,
-		Colors = { Color3.fromRGB(214, 152, 92), Color3.fromRGB(196, 136, 78), Color3.fromRGB(226, 168, 108) },
-		Stand = "Supports",
-	},
-	BrickStack = {
-		Name = "Brick Stack",
-		RequiredPower = 500,
-		Coins = 30,
-		Respawn = 3,
-		Tier = 1,
-		Shape = "Box",
-		Size = Vector3.new(5, 3.6, 2.4),
-		Grid = Vector3.new(2, 3, 1),
-		Material = Enum.Material.Plastic,
-		Colors = { Color3.fromRGB(196, 72, 56), Color3.fromRGB(176, 60, 46), Color3.fromRGB(214, 90, 70) },
-		Stand = "Pedestal",
-	},
-	IronAnvil = {
-		Name = "Iron Anvil",
-		RequiredPower = 5_000,
-		Coins = 150,
-		Respawn = 3,
-		Tier = 2,
-		Shape = "Anvil",
-		Size = Vector3.new(6.4, 4.2, 3.2),
-		Grid = Vector3.new(8, 6, 4),
-		Hollow = true,
-		Material = Enum.Material.Plastic,
-		Colors = { Color3.fromRGB(88, 92, 104), Color3.fromRGB(78, 82, 94) },
-		AccentColor = Color3.fromRGB(190, 196, 210),
-		Stand = "Pedestal",
-	},
-
-	-- Shaolin Temple -----------------------------------------------------------
-	StonePillar = {
-		Name = "Stone Pillar",
-		RequiredPower = 25_000,
-		Coins = 600,
-		Respawn = 3,
-		Tier = 2,
-		Shape = "Pillar",
-		Size = Vector3.new(4, 7, 4),
-		Grid = Vector3.new(4, 7, 4),
-		Hollow = true,
-		Material = Enum.Material.Plastic,
-		Colors = { Color3.fromRGB(170, 166, 150), Color3.fromRGB(150, 146, 132) },
-		AccentColor = Color3.fromRGB(230, 180, 50),
-		Stand = "Pedestal",
-	},
-	SteelBeam = {
-		Name = "Steel Beam",
-		RequiredPower = 100_000,
-		Coins = 2_000,
-		Respawn = 3,
-		Tier = 3,
-		Shape = "IBeam",
-		Size = Vector3.new(11, 3, 2.4),
-		Grid = Vector3.new(6, 5, 3),
-		Material = Enum.Material.Plastic,
-		Colors = { Color3.fromRGB(110, 120, 134), Color3.fromRGB(96, 106, 120) },
-		Stand = "Supports",
-	},
-	DiamondBlock = {
-		Name = "Diamond Block",
-		RequiredPower = 500_000,
-		Coins = 8_000,
-		Respawn = 3.5,
-		Tier = 3,
-		Shape = "Box",
-		Size = Vector3.new(4.5, 4.5, 4.5),
-		Grid = Vector3.new(3, 3, 3),
-		Hollow = true,
-		Material = Enum.Material.Glass,
-		Transparency = 0.15,
-		Colors = { Color3.fromRGB(120, 230, 255), Color3.fromRGB(150, 240, 255), Color3.fromRGB(100, 210, 245) },
-		AccentColor = Color3.fromRGB(255, 255, 255),
-		AccentMaterial = Enum.Material.Neon,
-		AccentChance = 0.12,
-		Stand = "Pedestal",
-	},
-
-	-- Cyber Dojo ---------------------------------------------------------------
-	ServerRack = {
-		Name = "Titanium Server Rack",
-		RequiredPower = 2_500_000,
-		Coins = 30_000,
-		Respawn = 3.5,
-		Tier = 3,
-		Shape = "Rack",
-		Size = Vector3.new(4, 7.2, 3),
-		Grid = Vector3.new(3, 6, 2),
-		Material = Enum.Material.Plastic,
-		Colors = { Color3.fromRGB(40, 44, 56), Color3.fromRGB(32, 36, 46) },
-		AccentColor = Color3.fromRGB(40, 255, 160),
-		AccentMaterial = Enum.Material.Neon,
-		Stand = "Pedestal",
-	},
-	NeonCrystal = {
-		Name = "Neon Crystal",
-		RequiredPower = 12_000_000,
-		Coins = 120_000,
-		Respawn = 4,
-		Tier = 4,
-		Shape = "Crystal",
-		Size = Vector3.new(5, 9, 5),
-		Grid = Vector3.new(5, 9, 5),
-		Hollow = true,
-		Material = Enum.Material.Glass,
-		Transparency = 0.1,
-		Colors = { Color3.fromRGB(255, 60, 200), Color3.fromRGB(220, 40, 255) },
-		AccentColor = Color3.fromRGB(255, 180, 250),
-		AccentMaterial = Enum.Material.Neon,
-		AccentChance = 0.2,
-		Stand = "Float",
-	},
-	MechCore = {
-		Name = "Mech Reactor Core",
-		RequiredPower = 60_000_000,
-		Coins = 500_000,
-		Respawn = 4,
-		Tier = 4,
-		Shape = "MechCore",
-		Size = Vector3.new(7, 7, 7),
-		Grid = Vector3.new(6, 6, 6),
-		Hollow = true,
-		Material = Enum.Material.Plastic,
-		Colors = { Color3.fromRGB(70, 76, 90), Color3.fromRGB(56, 60, 72) },
-		AccentColor = Color3.fromRGB(255, 50, 60),
-		AccentMaterial = Enum.Material.Neon,
-		Stand = "Float",
-	},
-
-	-- Cosmic Void --------------------------------------------------------------
-	Meteorite = {
-		Name = "Meteorite",
-		RequiredPower = 300_000_000,
-		Coins = 2_500_000,
-		Respawn = 4,
-		Tier = 4,
-		Shape = "Meteorite",
-		Size = Vector3.new(7, 7, 7),
-		Grid = Vector3.new(6, 6, 6),
-		Hollow = true,
-		Material = Enum.Material.Plastic,
-		Colors = { Color3.fromRGB(60, 52, 50), Color3.fromRGB(78, 66, 60), Color3.fromRGB(48, 42, 42) },
-		AccentColor = Color3.fromRGB(255, 120, 30),
-		AccentMaterial = Enum.Material.Neon,
-		Stand = "Float",
-	},
-	Moon = {
-		Name = "Moon",
-		RequiredPower = 2_000_000_000,
-		Coins = 15_000_000,
-		Respawn = 5,
-		Tier = 5,
-		Shape = "Moon",
-		Size = Vector3.new(9, 9, 9),
-		Grid = Vector3.new(7, 7, 7),
-		Hollow = true,
-		Material = Enum.Material.Plastic,
-		Colors = { Color3.fromRGB(200, 200, 196), Color3.fromRGB(184, 184, 180) },
-		AccentColor = Color3.fromRGB(130, 130, 128),
-		Stand = "Float",
-	},
-	Planet = {
-		Name = "Planet",
-		RequiredPower = 15_000_000_000,
-		Coins = 100_000_000,
-		Respawn = 6,
-		Tier = 5,
-		Shape = "Planet",
-		Size = Vector3.new(16, 8, 16),
-		Grid = Vector3.new(11, 7, 11),
-		Hollow = true,
-		Material = Enum.Material.Plastic,
-		Colors = { Color3.fromRGB(60, 130, 255), Color3.fromRGB(70, 145, 255) },
-		AltColor = Color3.fromRGB(70, 190, 90),
-		AccentColor = Color3.fromRGB(240, 200, 120),
-		Stand = "Float",
-	},
-}
-
---------------------------------------------------------------------------------
--- Training dojos (unlocked by rebirths)
---------------------------------------------------------------------------------
-
-Config.Dojos = {
+Config.Biomes = {
 	{
-		Id = "Starter",
-		Name = "Starter Dojo",
-		RequiredRebirths = 0,
-		TrainingMultiplier = 1,
-		Origin = Vector3.new(0, 0, 0),
-		Size = Vector3.new(170, 0, 130),
-		Objects = { "WoodenBoard", "BrickStack", "IronAnvil" },
-		Colors = {
-			Floor = Color3.fromRGB(226, 196, 140),
-			Mat = Color3.fromRGB(110, 170, 90),
-			MatAlt = Color3.fromRGB(150, 200, 110),
-			Wall = Color3.fromRGB(150, 98, 60),
-			Trim = Color3.fromRGB(196, 40, 40),
-			Accent = Color3.fromRGB(255, 205, 60),
-		},
-		Lighting = {
-			ClockTime = 14,
-			Ambient = Color3.fromRGB(110, 100, 90),
-			OutdoorAmbient = Color3.fromRGB(150, 140, 125),
-			AtmosphereColor = Color3.fromRGB(200, 215, 230),
-			AtmosphereDecay = Color3.fromRGB(120, 140, 170),
-			AtmosphereDensity = 0.3,
-			Tint = Color3.fromRGB(255, 250, 240),
-		},
+		Id = "Bamboo",
+		Name = "Bamboo Grove",
+		WinsPerWall = 1,
+		Wall = { Color3.fromRGB(214, 152, 92), Color3.fromRGB(196, 136, 78) },
+		WallMaterial = Enum.Material.Plastic,
+		Ground = { Color3.fromRGB(96, 200, 70), Color3.fromRGB(80, 184, 60) },
+		Rail = { Color3.fromRGB(150, 98, 52), Color3.fromRGB(176, 118, 66) },
+		Tree = { Trunk = Color3.fromRGB(130, 90, 50), Leaves = Color3.fromRGB(110, 220, 70) },
+		Title = Color3.fromRGB(140, 255, 110),
 	},
 	{
-		Id = "Shaolin",
-		Name = "Shaolin Temple",
-		RequiredRebirths = 1,
-		TrainingMultiplier = 2,
-		Origin = Vector3.new(1000, 0, 0),
-		Size = Vector3.new(170, 0, 130),
-		Objects = { "StonePillar", "SteelBeam", "DiamondBlock" },
-		Colors = {
-			Floor = Color3.fromRGB(150, 140, 128),
-			Mat = Color3.fromRGB(190, 50, 40),
-			MatAlt = Color3.fromRGB(220, 170, 60),
-			Wall = Color3.fromRGB(180, 36, 30),
-			Trim = Color3.fromRGB(240, 190, 50),
-			Accent = Color3.fromRGB(40, 140, 80),
-		},
-		Lighting = {
-			ClockTime = 17.2,
-			Ambient = Color3.fromRGB(120, 90, 70),
-			OutdoorAmbient = Color3.fromRGB(170, 130, 100),
-			AtmosphereColor = Color3.fromRGB(255, 200, 150),
-			AtmosphereDecay = Color3.fromRGB(200, 120, 90),
-			AtmosphereDensity = 0.35,
-			Tint = Color3.fromRGB(255, 235, 210),
-		},
+		Id = "Autumn",
+		Name = "Autumn Temple",
+		WinsPerWall = 3,
+		Wall = { Color3.fromRGB(196, 72, 56), Color3.fromRGB(176, 60, 46) },
+		WallMaterial = Enum.Material.Plastic,
+		Ground = { Color3.fromRGB(240, 170, 70), Color3.fromRGB(226, 150, 56) },
+		Rail = { Color3.fromRGB(220, 120, 50), Color3.fromRGB(240, 150, 70) },
+		Tree = { Trunk = Color3.fromRGB(120, 76, 44), Leaves = Color3.fromRGB(255, 140, 40) },
+		Title = Color3.fromRGB(255, 170, 60),
 	},
 	{
-		Id = "Cyber",
-		Name = "Cyber Dojo",
-		RequiredRebirths = 3,
-		TrainingMultiplier = 5,
-		Origin = Vector3.new(2000, 0, 0),
-		Size = Vector3.new(170, 0, 130),
-		Objects = { "ServerRack", "NeonCrystal", "MechCore" },
-		Colors = {
-			Floor = Color3.fromRGB(30, 32, 44),
-			Mat = Color3.fromRGB(20, 210, 255),
-			MatAlt = Color3.fromRGB(255, 40, 200),
-			Wall = Color3.fromRGB(44, 48, 64),
-			Trim = Color3.fromRGB(20, 230, 255),
-			Accent = Color3.fromRGB(255, 50, 200),
-		},
-		Lighting = {
-			ClockTime = 20.5,
-			Ambient = Color3.fromRGB(70, 60, 110),
-			OutdoorAmbient = Color3.fromRGB(80, 70, 130),
-			AtmosphereColor = Color3.fromRGB(120, 80, 200),
-			AtmosphereDecay = Color3.fromRGB(40, 20, 90),
-			AtmosphereDensity = 0.4,
-			Tint = Color3.fromRGB(230, 225, 255),
-		},
+		Id = "Frost",
+		Name = "Frost Peak",
+		WinsPerWall = 10,
+		Wall = { Color3.fromRGB(150, 220, 255), Color3.fromRGB(180, 235, 255) },
+		WallMaterial = Enum.Material.Glass,
+		Ground = { Color3.fromRGB(235, 245, 255), Color3.fromRGB(215, 232, 250) },
+		Rail = { Color3.fromRGB(150, 200, 240), Color3.fromRGB(190, 225, 250) },
+		Tree = { Trunk = Color3.fromRGB(110, 90, 80), Leaves = Color3.fromRGB(230, 245, 255) },
+		Title = Color3.fromRGB(150, 230, 255),
+	},
+	{
+		Id = "Lava",
+		Name = "Lava Fortress",
+		WinsPerWall = 30,
+		Wall = { Color3.fromRGB(46, 40, 44), Color3.fromRGB(60, 50, 54) },
+		WallMaterial = Enum.Material.Plastic,
+		WallAccent = Color3.fromRGB(255, 100, 30),
+		Ground = { Color3.fromRGB(70, 56, 56), Color3.fromRGB(56, 44, 46) },
+		Rail = { Color3.fromRGB(255, 90, 30), Color3.fromRGB(200, 60, 20) },
+		Tree = { Trunk = Color3.fromRGB(40, 30, 30), Leaves = Color3.fromRGB(255, 90, 30) },
+		Title = Color3.fromRGB(255, 110, 50),
+	},
+	{
+		Id = "Sky",
+		Name = "Sky Palace",
+		WinsPerWall = 100,
+		Wall = { Color3.fromRGB(250, 250, 255), Color3.fromRGB(235, 235, 245) },
+		WallMaterial = Enum.Material.Plastic,
+		WallAccent = Color3.fromRGB(255, 205, 60),
+		Ground = { Color3.fromRGB(200, 230, 255), Color3.fromRGB(180, 215, 250) },
+		Rail = { Color3.fromRGB(255, 210, 70), Color3.fromRGB(255, 235, 140) },
+		Tree = { Trunk = Color3.fromRGB(230, 220, 200), Leaves = Color3.fromRGB(255, 190, 230) },
+		Title = Color3.fromRGB(255, 220, 90),
 	},
 	{
 		Id = "Cosmic",
-		Name = "Cosmic Void",
-		RequiredRebirths = 6,
-		TrainingMultiplier = 15,
-		Origin = Vector3.new(3000, 120, 0),
-		Size = Vector3.new(170, 0, 130),
-		Objects = { "Meteorite", "Moon", "Planet" },
-		Colors = {
-			Floor = Color3.fromRGB(36, 24, 64),
-			Mat = Color3.fromRGB(120, 60, 255),
-			MatAlt = Color3.fromRGB(60, 30, 140),
-			Wall = Color3.fromRGB(24, 16, 44),
-			Trim = Color3.fromRGB(180, 120, 255),
-			Accent = Color3.fromRGB(255, 120, 230),
+		Name = "Cosmic Rift",
+		WinsPerWall = 300,
+		Wall = { Color3.fromRGB(150, 70, 255), Color3.fromRGB(110, 40, 220) },
+		WallMaterial = Enum.Material.Glass,
+		WallAccent = Color3.fromRGB(255, 120, 240),
+		Ground = { Color3.fromRGB(40, 26, 70), Color3.fromRGB(30, 20, 56) },
+		Rail = { Color3.fromRGB(180, 120, 255), Color3.fromRGB(110, 60, 220) },
+		Tree = { Trunk = Color3.fromRGB(60, 40, 90), Leaves = Color3.fromRGB(120, 255, 230) },
+		Title = Color3.fromRGB(200, 140, 255),
+	},
+}
+
+--------------------------------------------------------------------------------
+-- Eggs & pets
+--------------------------------------------------------------------------------
+
+Config.Rarities = {
+	Common = { Order = 1, Color = Color3.fromRGB(210, 210, 220) },
+	Uncommon = { Order = 2, Color = Color3.fromRGB(90, 220, 90) },
+	Rare = { Order = 3, Color = Color3.fromRGB(70, 160, 255) },
+	Epic = { Order = 4, Color = Color3.fromRGB(180, 90, 255) },
+	Legendary = { Order = 5, Color = Color3.fromRGB(255, 190, 40) },
+	Mythic = { Order = 6, Color = Color3.fromRGB(255, 70, 110) },
+	Secret = { Order = 7, Color = Color3.fromRGB(255, 255, 255) },
+}
+
+local function pet(
+	name: string,
+	rarity: string,
+	bonus: number,
+	shape: string,
+	body: Color3,
+	accent: Color3,
+	extra: { [string]: any }?
+): { [string]: any }
+	local def = { Name = name, Rarity = rarity, Bonus = bonus, Shape = shape, Body = body, Accent = accent }
+	if extra then
+		for key, value in extra do
+			def[key] = value
+		end
+	end
+	return def
+end
+
+-- Pet Bonus adds to the Strength multiplier: equipped pets give x(1 + sum of bonuses).
+-- Shape: Dog | Cat | Bunny | Bear | Bird | Dragon | Unicorn | Lion (see shared/PetModels.luau)
+Config.Pets = {
+	Puppy = pet("Puppy", "Common", 0.1, "Dog", Color3.fromRGB(210, 160, 110), Color3.fromRGB(150, 100, 60)),
+	Kitty = pet("Kitty", "Common", 0.12, "Cat", Color3.fromRGB(240, 240, 240), Color3.fromRGB(255, 170, 190)),
+	Bunny = pet("Bunny", "Uncommon", 0.2, "Bunny", Color3.fromRGB(255, 220, 230), Color3.fromRGB(255, 150, 180)),
+	Panda = pet("Panda", "Rare", 0.35, "Bear", Color3.fromRGB(245, 245, 245), Color3.fromRGB(30, 30, 30)),
+
+	Fox = pet("Fox", "Uncommon", 0.3, "Cat", Color3.fromRGB(240, 130, 40), Color3.fromRGB(255, 245, 235)),
+	Monkey = pet("Monkey", "Uncommon", 0.4, "Bear", Color3.fromRGB(150, 100, 60), Color3.fromRGB(240, 200, 160)),
+	Tiger = pet("Tiger", "Rare", 0.7, "Cat", Color3.fromRGB(255, 150, 30), Color3.fromRGB(30, 30, 30)),
+	GoldenPanda = pet(
+		"Golden Panda",
+		"Epic",
+		1.2,
+		"Bear",
+		Color3.fromRGB(255, 210, 60),
+		Color3.fromRGB(150, 100, 20),
+		{ Glow = true }
+	),
+
+	Owl = pet("Owl", "Rare", 0.9, "Bird", Color3.fromRGB(150, 110, 80), Color3.fromRGB(255, 220, 120)),
+	Crane = pet("Crane", "Rare", 1.3, "Bird", Color3.fromRGB(250, 250, 250), Color3.fromRGB(230, 40, 40)),
+	SnowLeopard = pet("Snow Leopard", "Epic", 2, "Cat", Color3.fromRGB(235, 240, 250), Color3.fromRGB(110, 120, 140)),
+	JadeDragon = pet(
+		"Jade Dragon",
+		"Legendary",
+		4,
+		"Dragon",
+		Color3.fromRGB(40, 200, 120),
+		Color3.fromRGB(255, 220, 80),
+		{ Glow = true }
+	),
+
+	RedPanda = pet("Red Panda", "Epic", 3, "Bear", Color3.fromRGB(200, 70, 40), Color3.fromRGB(250, 240, 230)),
+	Kirin = pet("Kirin", "Epic", 5, "Unicorn", Color3.fromRGB(255, 230, 150), Color3.fromRGB(80, 200, 255)),
+	ThunderTiger = pet(
+		"Thunder Tiger",
+		"Legendary",
+		9,
+		"Cat",
+		Color3.fromRGB(60, 80, 200),
+		Color3.fromRGB(255, 240, 80),
+		{ Glow = true }
+	),
+	ShadowDragon = pet(
+		"Shadow Dragon",
+		"Mythic",
+		20,
+		"Dragon",
+		Color3.fromRGB(40, 30, 60),
+		Color3.fromRGB(180, 70, 255),
+		{ Glow = true }
+	),
+
+	RainbowUnicorn = pet(
+		"Rainbow Unicorn",
+		"Legendary",
+		6,
+		"Unicorn",
+		Color3.fromRGB(255, 255, 255),
+		Color3.fromRGB(255, 120, 220),
+		{ Glow = true }
+	),
+	GalaxyCat = pet(
+		"Galaxy Cat",
+		"Mythic",
+		15,
+		"Cat",
+		Color3.fromRGB(70, 40, 160),
+		Color3.fromRGB(120, 255, 255),
+		{ Glow = true }
+	),
+	DragonKing = pet(
+		"Dragon King",
+		"Secret",
+		50,
+		"Dragon",
+		Color3.fromRGB(255, 200, 40),
+		Color3.fromRGB(230, 30, 40),
+		{ Glow = true }
+	),
+
+	-- Game-pass pet ("Best in game"): always 1000% better than your best other pet.
+	LionKing = pet(
+		"Lion King",
+		"Secret",
+		10,
+		"Lion",
+		Color3.fromRGB(240, 180, 70),
+		Color3.fromRGB(200, 60, 50),
+		{ Glow = true, Pass = "LionKing", AlwaysBetterBy = 10 }
+	),
+}
+
+-- Eggs sit on pads behind spawn. Cost is in Wins, or a Robux developer product (Product).
+Config.Eggs = {
+	{
+		Id = "Common",
+		Name = "Common Egg",
+		Cost = 50,
+		Color = Color3.fromRGB(240, 240, 245),
+		Pool = { Puppy = 45, Kitty = 35, Bunny = 16, Panda = 4 },
+	},
+	{
+		Id = "Uncommon",
+		Name = "Uncommon Egg",
+		Cost = 500,
+		Color = Color3.fromRGB(80, 220, 90),
+		Pool = { Fox = 42, Monkey = 33, Tiger = 20, GoldenPanda = 5 },
+	},
+	{
+		Id = "Rare",
+		Name = "Rare Egg",
+		Cost = 4_000,
+		Color = Color3.fromRGB(90, 200, 255),
+		Pool = { Owl = 45, Crane = 35, SnowLeopard = 17, JadeDragon = 3 },
+	},
+	{
+		Id = "Legendary",
+		Name = "Legendary Egg",
+		Cost = 30_000,
+		Color = Color3.fromRGB(255, 190, 40),
+		Pool = { RedPanda = 50, Kirin = 35, ThunderTiger = 13, ShadowDragon = 2 },
+	},
+	{
+		Id = "Rainbow",
+		Name = "Rainbow Egg",
+		Product = "RainbowEgg",
+		Color = Color3.fromRGB(255, 120, 220),
+		Rainbow = true,
+		Pool = { RainbowUnicorn = 60, GalaxyCat = 35, DragonKing = 5 },
+	},
+}
+
+Config.PetsConfig = {
+	BaseSlots = 3,
+	ExtraSlotsPass = "PetSlots",
+	ExtraSlots = 2,
+	MaxInventory = 60,
+	LuckBoostMultiplier = 2, -- the 2x Luck boost multiplies the weight of every non-Common pet
+}
+
+--------------------------------------------------------------------------------
+-- Trails (bought with Wins): cosmetic + walk speed
+--------------------------------------------------------------------------------
+
+Config.Trails = {
+	{
+		Id = "Breeze",
+		Name = "Breeze",
+		Cost = 100,
+		Speed = 2,
+		Colors = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(150, 220, 255) },
+	},
+	{
+		Id = "Flame",
+		Name = "Flame",
+		Cost = 1_000,
+		Speed = 4,
+		Colors = { Color3.fromRGB(255, 220, 60), Color3.fromRGB(255, 60, 20) },
+	},
+	{
+		Id = "Frost",
+		Name = "Frost",
+		Cost = 7_500,
+		Speed = 6,
+		Colors = { Color3.fromRGB(220, 250, 255), Color3.fromRGB(60, 160, 255) },
+	},
+	{
+		Id = "Thunder",
+		Name = "Thunder",
+		Cost = 40_000,
+		Speed = 8,
+		Colors = { Color3.fromRGB(255, 255, 150), Color3.fromRGB(120, 80, 255) },
+	},
+	{
+		Id = "Rainbow",
+		Name = "Rainbow",
+		Cost = 200_000,
+		Speed = 10,
+		Rainbow = true,
+		Colors = { Color3.fromRGB(255, 60, 60), Color3.fromRGB(60, 120, 255) },
+	},
+	{
+		Id = "Galaxy",
+		Name = "Galaxy",
+		Cost = 1_000_000,
+		Speed = 12,
+		Colors = { Color3.fromRGB(255, 120, 240), Color3.fromRGB(40, 20, 120) },
+	},
+}
+
+Config.BaseWalkSpeed = 20
+
+--------------------------------------------------------------------------------
+-- Rebirth & levels
+--------------------------------------------------------------------------------
+
+Config.Rebirth = {
+	BaseCost = 2_500, -- Strength needed (= reaching max level) for the first rebirth
+	CostGrowth = 3.5,
+	StrengthPerRebirth = 0.5, -- permanent Strength multiplier: 1 + rebirths * this
+	WinsPerRebirth = 0.1, -- permanent Wins multiplier: 1 + rebirths * this
+	MaxLevel = 40,
+}
+
+--------------------------------------------------------------------------------
+-- Rewards, boosts, social
+--------------------------------------------------------------------------------
+
+Config.Boosts = {
+	Strength = { Name = "2x Strength", Icon = "⚡", Color = Color3.fromRGB(80, 170, 255) },
+	Wins = { Name = "2x Wins", Icon = "🏆", Color = Color3.fromRGB(255, 200, 40) },
+	Luck = { Name = "2x Luck", Icon = "🍀", Color = Color3.fromRGB(90, 220, 90) },
+}
+
+-- Gifts: claimable after X minutes in the current session. Strength rewards are worth
+-- `Chops` chops at your current gain, so they stay useful at every stage.
+Config.PlaytimeRewards = {
+	{ Minutes = 1, Kind = "Strength", Chops = 400 },
+	{ Minutes = 3, Kind = "Wins", Amount = 10 },
+	{ Minutes = 5, Kind = "Egg", Egg = "Common" },
+	{ Minutes = 8, Kind = "Boost", Boost = "Strength", Duration = 600 },
+	{ Minutes = 12, Kind = "Wins", Amount = 250 },
+	{ Minutes = 17, Kind = "Strength", Chops = 3_000 },
+	{ Minutes = 23, Kind = "Boost", Boost = "Wins", Duration = 600 },
+	{ Minutes = 30, Kind = "Egg", Egg = "Uncommon" },
+	{ Minutes = 40, Kind = "Boost", Boost = "Luck", Duration = 900 },
+	{ Minutes = 55, Kind = "Wins", Amount = 2_500 },
+	{ Minutes = 70, Kind = "Strength", Chops = 20_000 },
+	{ Minutes = 90, Kind = "Egg", Egg = "Rare" },
+}
+
+Config.Offline = {
+	MinSeconds = 120,
+	MaxHours = 8,
+	Efficiency = 0.35, -- fraction of idle training earned while away
+	ProductMultiplier = 3, -- the "x3" Robux claim
+}
+
+Config.Social = {
+	FriendBoostPerFriend = 0.1,
+	MaxFriendBoost = 0.5,
+}
+
+Config.Leaderboards = {
+	UpdateInterval = 90,
+	Size = 10,
+	Boards = {
+		{ Id = "TotalWins", Title = "MOST WINS", Store = "LB_TotalWins_v1", Stat = "TotalWins", Icon = "🏆" },
+		{ Id = "Rebirths", Title = "MOST REBIRTHS", Store = "LB_Rebirths_v1", Stat = "Rebirths", Icon = "🌀" },
+		{
+			Id = "BestDistance",
+			Title = "LONGEST SMASH",
+			Store = "LB_BestDistance_v1",
+			Stat = "BestDistance",
+			Icon = "📏",
+			Suffix = " m",
 		},
-		Lighting = {
-			ClockTime = 0,
-			Ambient = Color3.fromRGB(70, 50, 110),
-			OutdoorAmbient = Color3.fromRGB(60, 40, 100),
-			AtmosphereColor = Color3.fromRGB(60, 30, 120),
-			AtmosphereDecay = Color3.fromRGB(10, 0, 30),
-			AtmosphereDensity = 0.25,
-			Tint = Color3.fromRGB(235, 225, 255),
+	},
+}
+
+--------------------------------------------------------------------------------
+-- Robux (placeholders). Create the passes/products on the Creator Hub, then paste the ids.
+-- Id = 0 → shown in the shop but not purchasable in a live game. In Studio, with
+-- StudioTestPurchases on, buying grants the item instantly so you can test everything.
+--------------------------------------------------------------------------------
+
+Config.Monetization = {
+	StudioTestPurchases = true,
+
+	GamePasses = {
+		AutoChop = { Id = 0, Price = 25, Name = "Auto Chop", Icon = "🤖", Description = "Chops for you nonstop" },
+		DoubleStrength = {
+			Id = 0,
+			Price = 49,
+			Name = "2x Strength",
+			Icon = "⚡",
+			Description = "Double Strength forever",
+		},
+		DoubleWins = { Id = 0, Price = 59, Name = "2x Wins", Icon = "🏆", Description = "Double Wins forever" },
+		PetSlots = { Id = 0, Price = 99, Name = "+2 Pet Slots", Icon = "🐾", Description = "Equip 2 more pets" },
+		GoldenZone = { Id = 0, Price = 99, Name = "Golden Temple", Icon = "⛩️", Description = "x30 training zone" },
+		DragonZone = { Id = 0, Price = 249, Name = "Dragon Sanctum", Icon = "🐉", Description = "x75 training zone" },
+		CosmicZone = { Id = 0, Price = 599, Name = "Cosmic Dojo", Icon = "🌌", Description = "x200 training zone" },
+		PhoenixRelic = {
+			Id = 0,
+			Price = 499,
+			Name = "Phoenix Relic",
+			Icon = "🔥",
+			Description = "Always 125% better hands",
+		},
+		LionKing = { Id = 0, Price = 799, Name = "Lion King", Icon = "🦁", Description = "Pet: always 1000% better" },
+	},
+
+	Products = {
+		Strength10K = { Id = 0, Price = 11, Name = "+10K Strength", Strength = 10_000 },
+		Strength100K = { Id = 0, Price = 45, Name = "+100K Strength", Strength = 100_000 },
+		Strength1M = { Id = 0, Price = 95, Name = "+1M Strength", Strength = 1_000_000 },
+		RainbowEgg = { Id = 0, Price = 45, Name = "Rainbow Egg" },
+		OfflineTriple = { Id = 0, Price = 9, Name = "x3 Offline Strength" },
+		StarterPack = {
+			Id = 0,
+			Price = 49,
+			Name = "Starter Pack",
+			Strength = 25_000,
+			Wins = 1_000,
+			Pet = "GalaxyCat",
+			OneTime = true,
 		},
 	},
 }
@@ -643,12 +673,12 @@ Config.Dojos = {
 --------------------------------------------------------------------------------
 
 Config.Data = {
-	SchemaVersion = 1,
+	SchemaVersion = 2,
 	AutosaveInterval = 60,
-	-- A session lock older than this (seconds) is considered abandoned by a crashed server.
 	SessionLockExpiry = 300,
 	LoadRetries = 6,
 	LoadRetryDelay = 4,
+	MaxReceipts = 50,
 }
 
 return Config

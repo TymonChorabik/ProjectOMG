@@ -20,6 +20,7 @@ export type ButtonProps = {
 	Name: string?,
 	Text: string,
 	Icon: string?,
+	Caption: string?, -- icon-button mode: big Icon on top, small Caption below
 	Color: Color3?,
 	TextColor: Color3?,
 	Size: UDim2,
@@ -100,17 +101,39 @@ function ChunkyButton.new(props: ButtonProps)
 		Parent = face,
 	}, { Create.Corner(UDim.new(1, 0)) })
 
-	local text = if props.Icon then props.Icon .. " " .. props.Text else props.Text
-	self.Label = Create.Label({
-		Name = "Label",
-		Text = text,
-		Font = props.Font or Theme.Fonts.Body,
-		TextColor3 = props.TextColor or Theme.Colors.White,
-		Size = UDim2.new(1, -16, 1, -10),
-		Position = UDim2.fromOffset(8, 5),
-		ZIndex = 3,
-		Parent = face,
-	})
+	if props.Caption then
+		self.IconLabel = Create.Label({
+			Name = "Icon",
+			Text = props.Icon or "",
+			Stroke = false,
+			Size = UDim2.new(1, -8, 0.62, 0),
+			Position = UDim2.fromScale(0, 0.04) + UDim2.fromOffset(4, 0),
+			ZIndex = 3,
+			Parent = face,
+		})
+		self.Label = Create.Label({
+			Name = "Label",
+			Text = props.Caption,
+			Font = props.Font or Theme.Fonts.Body,
+			TextColor3 = props.TextColor or Theme.Colors.White,
+			Size = UDim2.new(1, -8, 0.3, 0),
+			Position = UDim2.fromScale(0, 0.66) + UDim2.fromOffset(4, 0),
+			ZIndex = 3,
+			Parent = face,
+		})
+	else
+		local text = if props.Icon then props.Icon .. " " .. props.Text else props.Text
+		self.Label = Create.Label({
+			Name = "Label",
+			Text = text,
+			Font = props.Font or Theme.Fonts.Body,
+			TextColor3 = props.TextColor or Theme.Colors.White,
+			Size = UDim2.new(1, -16, 1, -10),
+			Position = UDim2.fromOffset(8, 5),
+			ZIndex = 3,
+			Parent = face,
+		})
+	end
 	Create("UITextSizeConstraint", { MaxTextSize = props.MaxTextSize or 30, Parent = self.Label })
 
 	face.MouseEnter:Connect(function()
@@ -180,6 +203,52 @@ function ChunkyButton:SetEnabled(enabled: boolean)
 	self._enabled = enabled
 	self.Face.AutoButtonColor = false
 	self.Label.TextTransparency = if enabled then 0 else 0.35
+end
+
+-- Small red notification bubble in the top-right corner (nil hides it).
+function ChunkyButton:SetBadge(text: string?)
+	local badge = self.Instance:FindFirstChild("Badge")
+	if not text then
+		if badge then
+			badge.Visible = false
+		end
+		return
+	end
+	if not badge then
+		badge = Create.Label({
+			Name = "Badge",
+			BackgroundTransparency = 0,
+			BackgroundColor3 = Theme.Colors.Red,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(1, -4, 0, 4),
+			Size = UDim2.fromOffset(28, 28),
+			ZIndex = 10,
+			Parent = self.Instance,
+		})
+		Create.Corner(UDim.new(0.5, 0)).Parent = badge
+		Create.Stroke(2).Parent = badge
+	end
+	badge.Text = text
+	badge.Visible = true
+end
+
+-- Text tag sitting on the top edge (e.g. "100%" on the Rebirth button). nil hides it.
+function ChunkyButton:SetTag(text: string?)
+	local tag = self.Instance:FindFirstChild("Tag")
+	if not tag then
+		tag = Create.Label({
+			Name = "Tag",
+			Font = Theme.Fonts.Title,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0, 0),
+			Size = UDim2.new(1, 8, 0, 24),
+			StrokeThickness = 3,
+			ZIndex = 10,
+			Parent = self.Instance,
+		})
+	end
+	tag.Text = text or ""
+	tag.Visible = text ~= nil
 end
 
 -- Visual pulse to draw attention (e.g. rebirth available).

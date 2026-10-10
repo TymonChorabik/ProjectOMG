@@ -1,8 +1,9 @@
 --[[
 	TrainingService.luau
-	The +1 loop. Clients only ever say "I chopped" (optionally "...at this stand"); every number
-	is computed here. A per-player token bucket caps chop rate, so autoclickers and remote spam
-	gain nothing beyond the legit maximum.
+	The +1 loop.
+	• Manual chops: clients only say "I chopped"; the server finds the player's training zone and
+	  computes the gain. A token bucket caps the rate, so autoclickers gain nothing extra.
+	• Idle training: anyone standing in an unlocked training zone trains every IdleInterval.
 ]]
 
 local Players = game:GetService("Players")
@@ -14,14 +15,13 @@ local Formulas = require(Shared.Formulas)
 local Remotes = require(Shared.Remotes)
 
 local DataService = require(script.Parent.DataService)
-local StandService = require(script.Parent.StandService)
+local WorldService = require(script.Parent.WorldService)
 
 local TrainingService = {}
 
 type Bucket = { Tokens: number, Last: number }
 
 local buckets: { [Player]: Bucket } = {}
-local rng = Random.new()
 
 local function consumeToken(player: Player): boolean
 	local training = Config.Training
@@ -43,55 +43,57 @@ local function consumeToken(player: Player): boolean
 	return true
 end
 
--- Dojo training bonus, only if the player is standing in a dojo they've unlocked.
-local function getTrainingMultiplier(data, position: Vector3): number
-	local dojo = Formulas.GetDojoAtPosition(position.X, position.Y, position.Z)
-	if dojo and Formulas.IsDojoUnlocked(data, dojo.Id) then
-		return dojo.TrainingMultiplier
+local function getTrainingRoot(player: Player): BasePart?
+	if player:GetAttribute("Running") then
+		return nil
 	end
-	return 1
-end
-
-local function onChop(player: Player, standId: any)
-	if standId ~= nil and (type(standId) ~= "string" or #standId > 64) then
-		return
-	end
-
-	local data = DataService:GetData(player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not data or not humanoid or not root or humanoid.Health <= 0 then
-		return
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if humanoid and humanoid.Health > 0 and root and root:IsA("BasePart") then
+		return root
 	end
-	if not consumeToken(player) then
-		return
+	return nil
+end
+
+-- Grants one chop's Strength. Returns the gain (0 if nothing happened).
+local function train(player: Player, idle: boolean): number
+	local data = DataService:GetData(player)
+	local root = getTrainingRoot(player)
+	if not data or not root then
+		return 0
 	end
-
-	local gain = Formulas.GetChopGain(data, getTrainingMultiplier(data, root.Position))
-	local isCrit = rng:NextNumber() < Formulas.GetCritChance(data)
-	if isCrit then
-		gain *= Config.Training.CritMultiplier
+	local zoneMultiplier, zone = WorldService:GetZoneMultiplier(data, root.Position)
+	if idle and (not zone or not Formulas.IsZoneUnlocked(data, zone.Id)) then
+		return 0
 	end
-
-	DataService:Increment(player, "Power", gain)
-
-	local stats = data.Stats
-	stats.TotalChops += 1
-	stats.TotalPowerEarned += gain
-	stats.BestChop = math.max(stats.BestChop, gain)
-
-	Remotes.ChopResult:FireClient(player, gain, isCrit)
-
-	if standId then
-		StandService:TrySmash(player, standId)
-	end
+	local friendBoost = player:GetAttribute("FriendBoost")
+	local gain =
+		Formulas.GetChopGain(data, zoneMultiplier, os.time(), if type(friendBoost) == "number" then friendBoost else 0)
+	DataService:Increment(player, "Strength", gain)
+	data.Stats.Chops += 1
+	Remotes.ChopResult:FireClient(player, gain, idle)
+	return gain
 end
 
 function TrainingService:Init() end
 
 function TrainingService:Start()
-	Remotes.Chop.OnServerEvent:Connect(onChop)
+	Remotes.Chop.OnServerEvent:Connect(function(player)
+		if consumeToken(player) then
+			train(player, false)
+		end
+	end)
+
+	task.spawn(function()
+		while true do
+			task.wait(Config.Training.IdleInterval)
+			for _, player in Players:GetPlayers() do
+				train(player, true)
+			end
+		end
+	end)
+
 	Players.PlayerRemoving:Connect(function(player)
 		buckets[player] = nil
 	end)

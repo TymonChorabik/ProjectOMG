@@ -1,9 +1,9 @@
 --[[
 	ChopController.luau
-	Player input → karate chop. Click / tap the world, press F or R2, or hit the CHOP button.
-	Each chop plays the animation, slash trail and sound immediately (no waiting on the
-	network), aims at the stand in front of you if you're strong enough, and asks the server
-	to credit the +1. Auto-Chop repeats this on a timer improved by the Swift Strikes upgrade.
+	Training input. Click / tap the world, press F or R2, or hit the CHOP! button. Each chop plays
+	the karate-chop animation, slash trail and sound immediately and asks the server to credit it.
+	Standing in a training zone also trains idly (the server sends those as idle ChopResults).
+	The Auto Chop game pass chops for you while it's toggled on.
 ]]
 
 local Players = game:GetService("Players")
@@ -18,11 +18,9 @@ local Remotes = require(Shared.Remotes)
 local Signal = require(Shared.Signal)
 
 local ClientData = require(script.Parent.Parent.ClientData)
-local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local ChopAnimator = require(script.Parent.Parent.Effects.ChopAnimator)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Popups = require(script.Parent.Parent.UI.Popups)
-local SmashController = require(script.Parent.SmashController)
 
 local ChopController = {}
 
@@ -33,53 +31,37 @@ local lastChop = 0
 local autoChop = false
 local autoToken = 0
 
-local function getAliveRoot(): BasePart?
+local function canChop(): boolean
+	if localPlayer:GetAttribute("Running") then
+		return false
+	end
 	local character = localPlayer.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	if humanoid and humanoid.Health > 0 and root and root:IsA("BasePart") then
-		return root
-	end
-	return nil
+	return humanoid ~= nil and humanoid.Health > 0
 end
 
 local function popupPosition(): Vector2
 	local camera = workspace.CurrentCamera
 	local character = localPlayer.Character
-	local hand = character and (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm"))
-	if camera and hand and hand:IsA("BasePart") then
-		local point, visible = camera:WorldToViewportPoint(hand.Position)
+	local head = character and character:FindFirstChild("Head")
+	if camera and head and head:IsA("BasePart") then
+		local point, visible = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 2, 0))
 		if visible then
-			return Vector2.new(point.X, point.Y - 40)
+			return Vector2.new(point.X, point.Y)
 		end
 	end
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
-	return Vector2.new(size.X / 2, size.Y * 0.45)
+	return Vector2.new(size.X / 2, size.Y * 0.4)
 end
 
 function ChopController.Chop()
 	local now = os.clock()
-	if now - lastChop < Config.Training.ClientMinInterval then
-		return
-	end
-	local root = getAliveRoot()
-	if not root then
+	if now - lastChop < Config.Training.ClientMinInterval or not canChop() then
 		return
 	end
 	lastChop = now
-
-	local standId = nil
-	local stand = SmashController.GetStandInRange(root.Position)
-	if stand then
-		if (ClientData.Get("Power") or 0) >= stand.RequiredPower then
-			standId = stand.Id
-		else
-			SmashController.Deny(stand)
-		end
-	end
-
-	Remotes.Chop:FireServer(standId)
-	Sfx.Play("Chop", { Volume = 0.4, PitchVariance = 0.12 })
+	Remotes.Chop:FireServer()
+	Sfx.Play("Chop", { Volume = 0.35, PitchVariance = 0.12 })
 	ChopAnimator.Play(false)
 end
 
@@ -94,35 +76,31 @@ function ChopController.SetAutoChop(enabled: boolean)
 	autoChop = enabled
 	autoToken += 1
 	ChopController.AutoChopChanged:Fire(enabled)
-
 	if enabled then
 		local token = autoToken
 		task.spawn(function()
 			while autoChop and autoToken == token do
-				ChopController.Chop()
-				task.wait(Formulas.GetAutoChopInterval(ClientData.Data or {}))
+				local data = ClientData.Data
+				if data and Formulas.HasPass(data, "AutoChop") then
+					ChopController.Chop()
+				end
+				task.wait(Config.Training.AutoChopInterval)
 			end
 		end)
 	end
 end
 
-local function onChopResult(gain: number, isCrit: boolean)
-	if isCrit then
-		Popups.ScreenText(
-			popupPosition(),
-			"CRIT! +" .. NumberFormat.Abbreviate(gain) .. " ⚡",
-			Color3.fromRGB(255, 120, 40),
-			46
-		)
-		Sfx.Play("Crit", { Volume = 0.5 })
-		CameraShake.Shake(0.12)
-	else
-		Popups.ScreenText(
-			popupPosition(),
-			"+" .. NumberFormat.Abbreviate(gain) .. " ⚡",
-			Color3.fromRGB(255, 225, 70),
-			32
-		)
+local function onChopResult(gain: number, idle: boolean)
+	Popups.ScreenText(
+		popupPosition(),
+		"⚡ +" .. NumberFormat.Abbreviate(gain),
+		Color3.fromRGB(255, 220, 70),
+		if idle then 28 else 34
+	)
+	if idle then
+		-- Idle training: the character keeps chopping on its own.
+		ChopAnimator.Play(false)
+		Sfx.Play("Chop", { Volume = 0.15, PitchVariance = 0.15 })
 	end
 end
 
@@ -131,15 +109,18 @@ local function bindCharacter(character: Model)
 	if not humanoid or not humanoid:IsA("Humanoid") then
 		return
 	end
-	-- Give the rig a moment to assemble its arm and Motor6Ds.
 	character:WaitForChild(if humanoid.RigType == Enum.HumanoidRigType.R6 then "Right Arm" else "RightHand", 5)
 	if localPlayer.Character ~= character then
 		return
 	end
 	ChopAnimator.Bind(character)
+	local item = Formulas.GetItem(ClientData.Get("EquippedItem"))
+	ChopAnimator.SetTrailColor(if item then item.Color else Color3.fromRGB(255, 230, 150))
+end
 
-	local aura = Formulas.GetAura(ClientData.Get("EquippedAura"))
-	ChopAnimator.SetTrailColor(if aura then aura.Color else Color3.fromRGB(255, 230, 150))
+-- The world input decides whether a click is a chop (LaneController may claim it first).
+ChopController.ShouldChopOnClick = function(): boolean
+	return true
 end
 
 function ChopController.Start()
@@ -148,12 +129,9 @@ function ChopController.Start()
 			return
 		end
 		local inputType, keyCode = input.UserInputType, input.KeyCode
-		if
-			inputType == Enum.UserInputType.MouseButton1
-			or inputType == Enum.UserInputType.Touch
-			or keyCode == Enum.KeyCode.F
-			or keyCode == Enum.KeyCode.ButtonR2
-		then
+		local isClick = inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch
+		local isKey = keyCode == Enum.KeyCode.F or keyCode == Enum.KeyCode.ButtonR2
+		if (isClick or isKey) and ChopController.ShouldChopOnClick() then
 			ChopController.Chop()
 		end
 	end)
@@ -169,9 +147,9 @@ function ChopController.Start()
 	end)
 
 	ClientData.Changed:Connect(function(key, value)
-		if key == "EquippedAura" then
-			local aura = Formulas.GetAura(value)
-			ChopAnimator.SetTrailColor(if aura then aura.Color else Color3.fromRGB(255, 230, 150))
+		if key == "EquippedItem" then
+			local item = Formulas.GetItem(value)
+			ChopAnimator.SetTrailColor(if item then item.Color else Color3.fromRGB(255, 230, 150))
 		end
 	end)
 end

@@ -1,6 +1,6 @@
 --[[
 	Main.client.luau
-	Client entry point: start data mirror, effects, gameplay controllers, then the UI.
+	Client entry point: start the data mirror, effects and gameplay controllers, then the UI.
 ]]
 
 local Client = script.Parent
@@ -8,13 +8,13 @@ local Client = script.Parent
 local ClientData = require(Client.ClientData)
 local Sfx = require(Client.Effects.Sfx)
 local ChopController = require(Client.Controllers.ChopController)
-local SmashController = require(Client.Controllers.SmashController)
+local LaneController = require(Client.Controllers.LaneController)
+local PetController = require(Client.Controllers.PetController)
 local UIController = require(Client.Controllers.UIController)
-local ZoneController = require(Client.Controllers.ZoneController)
 
 Sfx.Preload()
 ClientData.Start()
-SmashController.Start()
-ZoneController.Start()
+LaneController.Start()
+PetController.Start()
 ChopController.Start()
 UIController.Start()

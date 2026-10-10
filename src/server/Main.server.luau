@@ -1,18 +1,24 @@
 --[[
 	Main.server.luau
-	Boots every server service in dependency order: Init (set up, no yielding on players),
-	then Start (connect events, begin loops).
+	Boots every server service in dependency order: Init (register remotes/actions, build the
+	world), then Start (connect player events, begin loops).
 ]]
 
 local Services = script.Parent:WaitForChild("Services")
 
 local ORDER = {
 	"DataService",
-	"StandService",
 	"WorldService",
+	"ActionService",
+	"PetService",
+	"ProgressService",
+	"RewardsService",
+	"MonetizationService",
 	"TrainingService",
-	"ShopService",
+	"LaneService",
+	"SocialService",
 	"AvatarService",
+	"LeaderboardService",
 }
 
 local loaded = {}
@@ -28,4 +34,4 @@ for _, name in ORDER do
 	end)
 end
 
-print("[Kung Fu Chop!] Server ready")
+print("[+1 Kung Fu Chop!] Server ready")
