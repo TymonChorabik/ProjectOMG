@@ -1142,8 +1142,15 @@ START = """
 local UIController = require(game:GetService("StarterPlayer").StarterPlayerScripts.Client.Controllers.UIController)
 """
 
+PHONE = "workspace.CurrentCamera.ViewportSize = Vector2.new(844, 390)\n"
+
+# Scenes rendered at a different screen size (default 1920x1080).
+SIZES = {"hud_phone": (844, 390), "shop_phone": (844, 390)}
+
 SCENES = {
     "hud": START + "UIController.Start()",
+    "hud_phone": START + PHONE + "UIController.Start()",
+    "shop_phone": START + PHONE + 'UIController.Start()\nopenWindow("ShopMenu")',
     "shop": START + 'UIController.Start()\nopenWindow("ShopMenu")',
     "pets": START + 'UIController.Start()\nopenWindow("PetsMenu")',
     "rebirth": START + 'UIController.Start()\nopenWindow("RebirthMenu")',
@@ -1191,7 +1198,7 @@ def main(argv):
     for name in names:
         guis = run_scene(SCENES[name])
         out = os.path.join(OUT_DIR, f"{name}.png")
-        render(guis, bg, out)
+        render(guis, bg, out, SIZES.get(name, (1920, 1080)))
         print(f"  {name:<12} -> {os.path.relpath(out, ROOT)}")
     return 0
 
