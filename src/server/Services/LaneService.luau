@@ -3,6 +3,8 @@
 	The Board Wall smash. A player on the launch pad asks to start a run; the server decides how
 	many walls their Strength breaks (Formulas.GetRunResult), blocks new runs and training while
 	the client plays the charge animation, then pays the Wins when the run ends.
+	Auto Smash (game pass) runs can start from anywhere: the run always launches from the pad
+	and ends back on it, so owners farm Wins hands-free.
 ]]
 
 local Players = game:GetService("Players")
@@ -26,7 +28,7 @@ local function fail(message: string)
 	return { ok = false, message = message }
 end
 
-local function startRun(player: Player)
+local function startRun(player: Player, auto: any)
 	local data = DataService:GetData(player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -38,9 +40,12 @@ local function startRun(player: Player)
 		return fail("Catch your breath first!")
 	end
 
+	local autoRun = auto == true and Formulas.HasPass(data, "AutoSmash")
 	local pad = WorldService:GetPadPosition()
 	local offset = root.Position - pad
-	if Vector3.new(offset.X, 0, offset.Z).Magnitude > WorldService:GetPadRadius() + 4 or math.abs(offset.Y) > 12 then
+	local onPad = Vector3.new(offset.X, 0, offset.Z).Magnitude <= WorldService:GetPadRadius() + 4
+		and math.abs(offset.Y) <= 12
+	if not onPad and not autoRun then
 		return fail("Stand on the launch pad first!")
 	end
 

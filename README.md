@@ -20,7 +20,8 @@ One big studded hub, laid out like *+1 Stone Skipping*:
   Strength. There's a Robux Rainbow Egg, a "Best in game" pet showcase, and global top-10 boards.
 * **Rebirth** at Level 40 resets Strength for a permanent multiplier and new zones.
 * Gifts (playtime rewards), "Welcome back" offline training, 2x boosts, trails, friend boost,
-  Auto Smash (automatic wall runs) and a Robux shop are all included.
+  Auto Smash (farms the wall lane for you: launch, smash, land, repeat, from anywhere) and a
+  Robux shop are all included.
 
 | Hub | Board Wall lane | Training floors |
 |---|---|---|

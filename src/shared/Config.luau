@@ -72,8 +72,9 @@ Config.Training = {
 	IdleInterval = 0.6,
 }
 
--- Auto Smash game pass: while it's switched on and you stand on the launch pad, a new wall run
--- starts automatically this many seconds after the last one ends.
+-- Auto Smash game pass: while it's switched on you farm the Board Wall lane hands-free. From
+-- wherever you are, you launch from the pad, smash as far as your Strength goes, land back on
+-- the pad, and the next run starts this many seconds later.
 Config.AutoSmash = {
 	Delay = 1.5,
 }

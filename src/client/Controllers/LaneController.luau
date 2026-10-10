@@ -6,7 +6,9 @@
 	  flying-kick pose, every wall it can break shatters into stud chunks (locally), the camera
 	  follows, a distance counter ticks up and biome banners pop as you enter each biome.
 	• You stop at the first wall you're too weak for (clang!), get your Wins, and return to the pad.
-	• Auto Smash (game pass): while switched on, standing on the pad starts the next run by itself.
+	• Auto Smash (game pass): while switched on, runs start by themselves from wherever you are,
+	  one after another, so you farm Wins hands-free. It switches itself off if you can't break
+	  the first wall yet.
 ]]
 
 local Debris = game:GetService("Debris")
@@ -255,20 +257,29 @@ function LaneController.IsRunning(): boolean
 	return running
 end
 
-function LaneController.TryRun()
+-- auto: started by Auto Smash (may start away from the launch pad; failures retry quietly).
+function LaneController.TryRun(auto: boolean?)
 	if running then
 		return
 	end
 	running = true
 	task.spawn(function()
 		local ok, result = pcall(function()
-			return Remotes.StartRun:InvokeServer()
+			return Remotes.StartRun:InvokeServer(auto == true)
 		end)
 		if not ok or type(result) ~= "table" then
-			Popups.Toast("Connection hiccup — try again!", "Error")
+			if not auto then
+				Popups.Toast("Connection hiccup — try again!", "Error")
+			end
 		elseif not result.ok then
-			Popups.Toast(result.message or "You can't smash right now.", "Error")
+			if not auto then
+				Popups.Toast(result.message or "You can't smash right now.", "Error")
+			end
 		else
+			if auto and result.Walls == 0 then
+				-- Nothing to farm yet: stop instead of bonking the first wall forever.
+				LaneController.SetAutoSmash(false)
+			end
 			if result.message then
 				Popups.Toast(result.message, "Info")
 			end
@@ -296,16 +307,18 @@ function LaneController.SetAutoSmash(enabled: boolean)
 	end
 	autoSmash = enabled
 	LaneController.AutoSmashChanged:Fire(enabled)
-	if enabled and not onPad then
-		Popups.Toast("Auto Smash is on: stand on the launch pad!", "Info")
+	if enabled then
+		Popups.Toast("🤖 Auto Smash ON: farming Wins!", "Success")
 	end
 end
 
 local function autoSmashReady(): boolean
 	local data = ClientData.Data
+	local _, humanoid = getCharacter()
 	return autoSmash
-		and onPad
 		and not running
+		and humanoid ~= nil
+		and humanoid.Health > 0
 		and os.clock() - lastRunEnded >= Config.AutoSmash.Delay
 		and data ~= nil
 		and Formulas.HasPass(data, "AutoSmash")
@@ -332,7 +345,9 @@ function LaneController.Start()
 			prompt.HoldDuration = 0
 			prompt.MaxActivationDistance = Config.Lane.PadRadius + 4
 			prompt.RequiresLineOfSight = false
-			prompt.Triggered:Connect(LaneController.TryRun)
+			prompt.Triggered:Connect(function()
+				LaneController.TryRun()
+			end)
 			prompt.Parent = padInstance
 		end
 		local wallsFolder = lane:WaitForChild("Walls")
@@ -363,7 +378,7 @@ function LaneController.Start()
 				LaneController.PadChanged:Fire(onPad)
 			end
 			if autoSmashReady() then
-				LaneController.TryRun()
+				LaneController.TryRun(true)
 			end
 		end
 	end)

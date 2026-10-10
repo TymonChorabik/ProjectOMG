@@ -3,7 +3,7 @@
 	Single source of truth for networking. The server creates the instances; clients wait for them.
 
 	Client -> Server
-		StartRun (RemoteFunction)     () -> { ok, message?, Walls, Distance, Wins, Duration }
+		StartRun (RemoteFunction)     (auto: boolean?) -> { ok, message?, Walls, Distance, Wins, Duration }
 		Action (RemoteFunction)       (action: string, arg: string?) -> { ok: boolean, message: string?, ... }
 		RequestData (RemoteFunction)  () -> profile snapshot
 
