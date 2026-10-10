@@ -1,12 +1,15 @@
 --[[
 	UIController.luau
 	Builds the HUD + windows and wires them to player data, the chop/lane controllers and the
-	server. Only one window is open at a time.
+	server. Only one window is open at a time; while one is open the world is blurred and the
+	HUD steps aside, like in +1 Stone Skipping.
 ]]
 
+local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -17,13 +20,13 @@ local Remotes = require(Shared.Remotes)
 local ClientData = require(script.Parent.Parent.ClientData)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local Create = require(script.Parent.Parent.UI.Create)
+local EggPanel = require(script.Parent.Parent.UI.EggPanel)
 local HatchOverlay = require(script.Parent.Parent.UI.HatchOverlay)
 local Hud = require(script.Parent.Parent.UI.Hud)
 local Popups = require(script.Parent.Parent.UI.Popups)
 local WelcomeBack = require(script.Parent.Parent.UI.WelcomeBack)
 local GiftsMenu = require(script.Parent.Parent.UI.Menus.GiftsMenu)
 local InventoryMenu = require(script.Parent.Parent.UI.Menus.InventoryMenu)
-local PetsMenu = require(script.Parent.Parent.UI.Menus.PetsMenu)
 local RebirthMenu = require(script.Parent.Parent.UI.Menus.RebirthMenu)
 local ShopMenu = require(script.Parent.Parent.UI.Menus.ShopMenu)
 local TrailsMenu = require(script.Parent.Parent.UI.Menus.TrailsMenu)
@@ -124,23 +127,86 @@ function UIController.Start()
 	})
 	local menuScale = Create("UIScale", { Parent = menuLayer })
 
+	local menus: { [string]: any } = {}
+
+	-- Focus mode: blur the world and tuck the HUD away while a window (or popup) is up.
+	local blur = Lighting:FindFirstChild("MenuBlur")
+	if not blur or not blur:IsA("BlurEffect") then
+		blur = Instance.new("BlurEffect")
+		blur.Name = "MenuBlur"
+		blur.Size = 0
+		blur.Parent = Lighting
+	end
+	local blurEffect = blur :: BlurEffect
+	local focusHolds = 0
+	local eggPanel: any = nil
+	local function refreshFocus()
+		local focused = focusHolds > 0
+		for _, window in menus do
+			focused = focused or window.IsOpen
+		end
+		TweenService:Create(blurEffect, TweenInfo.new(0.25), { Size = if focused then 18 else 0 }):Play()
+		Hud.SetVisible(hud, not focused)
+		if eggPanel then
+			eggPanel:SetHidden(focused)
+		end
+	end
+	local function focus(held: boolean)
+		focusHolds = math.max(0, focusHolds + (if held then 1 else -1))
+		refreshFocus()
+	end
+
+	-- The Pets and Inventory tiles open the same tabbed window on different tabs.
+	local TABS = { Pets = "Pets", Inventory = "Hands" }
+	local function openMenu(name: string, tab: string?)
+		local windowName = if TABS[name] then "Inventory" else name
+		local window = menus[windowName]
+		if not window then
+			return
+		end
+		for otherName, other in menus do
+			if otherName ~= windowName then
+				other:Close()
+			end
+		end
+		local wantedTab = tab or TABS[name]
+		if window.IsOpen and (wantedTab == nil or window.Tab == wantedTab) then
+			window:Close()
+			return
+		end
+		if wantedTab and window.SetTab then
+			window:SetTab(wantedTab)
+		end
+		window:Open()
+	end
+
+	UIController.Menus = menus -- for the UI preview tool / debugging
+
 	local ctx = {
 		Request = request,
+		RequestAsync = requestAsync,
 		Purchase = purchase,
+		Focus = focus,
+		OpenMenu = openMenu,
 		GetSession = function()
 			return session
 		end,
 		ClaimGift = nil :: ((number) -> ())?,
+		EggPanel = nil :: any,
 	}
+	eggPanel = EggPanel.new(gui, ctx) -- WorldController shows it beside the egg you're at
+	ctx.EggPanel = eggPanel
+	UIController.EggPanel = eggPanel
 
-	local menus = {
-		Shop = ShopMenu.new(menuLayer, ctx),
-		Rebirth = RebirthMenu.new(menuLayer, ctx),
-		Pets = PetsMenu.new(menuLayer, ctx),
-		Trails = TrailsMenu.new(menuLayer, ctx),
-		Inventory = InventoryMenu.new(menuLayer, ctx),
-		Gifts = GiftsMenu.new(menuLayer, ctx),
-	}
+	menus.Shop = ShopMenu.new(menuLayer, ctx)
+	menus.Rebirth = RebirthMenu.new(menuLayer, ctx)
+	menus.Trails = TrailsMenu.new(menuLayer, ctx)
+	menus.Inventory = InventoryMenu.new(menuLayer, ctx) -- tabs: Hands, Pets, Boosts
+	menus.Gifts = GiftsMenu.new(menuLayer, ctx)
+	for _, window in menus do
+		window.Opened:Connect(refreshFocus)
+		window.Closed:Connect(refreshFocus)
+	end
 
 	ctx.ClaimGift = function(index: number)
 		task.spawn(function()
@@ -153,12 +219,7 @@ function UIController.Start()
 	end
 
 	hud.MenuPressed:Connect(function(name: string)
-		for otherName, window in menus do
-			if otherName ~= name then
-				window:Close()
-			end
-		end
-		menus[name]:Toggle()
+		ctx.OpenMenu(name)
 	end)
 
 	WorldController.Start(ctx)
@@ -287,8 +348,8 @@ function UIController.Start()
 	Remotes.Notify.OnClientEvent:Connect(function(message: string, kind: string?)
 		Popups.Toast(message, kind)
 	end)
-	Remotes.Hatched.OnClientEvent:Connect(function(eggId: string, petId: string)
-		HatchOverlay.Play(eggId, petId)
+	Remotes.Hatched.OnClientEvent:Connect(function(eggId: string, petIds: { string })
+		HatchOverlay.Play(eggId, petIds)
 	end)
 
 	task.spawn(function()
@@ -299,7 +360,9 @@ function UIController.Start()
 			if not current or current.OfflineAmount <= 0 then
 				return
 			end
-			WelcomeBack.Show(overlay, current.OfflineAmount, current.OfflineSeconds, function(multiplied: boolean)
+			focus(true)
+			WelcomeBack.Show(menuLayer, current.OfflineAmount, current.OfflineSeconds, function(multiplied: boolean)
+				focus(false)
 				if multiplied then
 					purchase("product:OfflineTriple")
 					-- If the purchase was cancelled the Strength is still waiting: offer it again.
@@ -327,12 +390,14 @@ function UIController.Start()
 			return
 		end
 		local viewport = camera.ViewportSize
-		-- Designed at 1920x1080 (scale 1); shrinks on smaller screens, never grows.
+		-- HUD designed at 1920x1080 (scale 1); shrinks on smaller screens, never grows.
 		local scale = math.clamp(math.min(viewport.X / 1920, viewport.Y / 1080), 0.55, 1)
 		for _, uiScale in hud.Scales do
 			uiScale.Scale = scale
 		end
-		menuScale.Scale = scale
+		eggPanel.Scale.Scale = scale
+		-- Windows are the star of the screen while open: about half its height.
+		menuScale.Scale = math.clamp(math.min(viewport.X / 1150, viewport.Y / 820), 0.55, 1.45)
 	end
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 	rescale()

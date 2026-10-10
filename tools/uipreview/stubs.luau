@@ -103,7 +103,8 @@ STUB_MODULES["StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldControl
 	return { Start = function() end }
 end
 
--- Finds a window by name under the HUD and shows it fully open.
+-- Finds a window by name under the HUD and shows it fully open (and hides the HUD, like
+-- UIController's focus mode).
 function openWindow(name: string)
 	local playerGui = game:GetService("Players").LocalPlayer.PlayerGui
 	for _, inst in playerGui:GetDescendants() do
@@ -112,6 +113,12 @@ function openWindow(name: string)
 			local scale = inst:FindFirstChildOfClass("UIScale")
 			if scale then
 				scale.Scale = 1
+			end
+			local hud = playerGui:FindFirstChild("KungFuHUD")
+			for _, child in if hud then hud:GetChildren() else {} do
+				if child:IsA("GuiObject") and child.Name ~= "Menus" then
+					child.Visible = false
+				end
 			end
 			return inst
 		end

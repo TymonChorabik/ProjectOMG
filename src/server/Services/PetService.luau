@@ -74,35 +74,54 @@ function PetService:GivePet(player: Player, petId: string): string?
 	return uid
 end
 
--- Rolls an egg and gives the pet. `paid` = true when the cost was already handled (Robux, gifts).
-function PetService:HatchEgg(player: Player, eggId: string, paid: boolean): (boolean, string)
+-- Rolls `count` eggs (1, 3 or 8) and gives the pets. `paid` = true when the cost was already
+-- handled (Robux, gifts); otherwise it costs count x the egg's Wins price. All or nothing: it
+-- fails without charging if there isn't room for every pet.
+function PetService:HatchEggs(player: Player, eggId: string, count: number, paid: boolean): (boolean, string)
 	local data = DataService:GetData(player)
 	local egg = Formulas.GetEgg(eggId)
 	if not data or not egg then
 		return false, "Unknown egg."
 	end
-	if not self:HasRoom(data) then
-		return false, "Your pet inventory is full! Delete some pets first."
+	if not table.find(Config.PetsConfig.HatchCounts, count) then
+		return false, "Bad hatch amount."
+	end
+	local room = Config.PetsConfig.MaxInventory - countPets(data)
+	if room < count then
+		return false,
+			if room <= 0
+				then "Your pet inventory is full! Delete some pets first."
+				else `Only room for {room} more pets! Delete some first.`
 	end
 	if not paid then
 		if not egg.Cost then
 			return false, "This egg is bought with Robux."
 		end
-		if data.Wins < egg.Cost then
-			return false, `You need {NumberFormat.Abbreviate(egg.Cost)} Wins!`
+		local cost = egg.Cost * count
+		if data.Wins < cost then
+			return false, `You need {NumberFormat.Abbreviate(cost)} Wins!`
 		end
-		DataService:Set(player, "Wins", data.Wins - egg.Cost)
+		DataService:Set(player, "Wins", data.Wins - cost)
 	end
 
 	local luck = Formulas.IsBoostActive(data, "Luck", os.time())
-	local petId = Formulas.RollEgg(egg.Id, rng:NextNumber(), luck) or "Puppy"
-	local uid = self:GivePet(player, petId)
-	if not uid then
-		return false, "Your pet inventory is full!"
+	local petIds = {}
+	for _ = 1, count do
+		local petId = Formulas.RollEgg(egg.Id, rng:NextNumber(), luck) or "Puppy"
+		if self:GivePet(player, petId) then
+			table.insert(petIds, petId)
+			data.Stats.EggsHatched += 1
+		end
 	end
-	data.Stats.EggsHatched += 1
-	Remotes.Hatched:FireClient(player, egg.Id, petId, uid)
-	return true, `You hatched a {Config.Pets[petId].Name}!`
+	Remotes.Hatched:FireClient(player, egg.Id, petIds)
+	if #petIds == 1 then
+		return true, `You hatched a {Config.Pets[petIds[1]].Name}!`
+	end
+	return true, `You hatched {#petIds} pets!`
+end
+
+function PetService:HatchEgg(player: Player, eggId: string, paid: boolean): (boolean, string)
+	return self:HatchEggs(player, eggId, 1, paid)
 end
 
 --------------------------------------------------------------------------------
@@ -111,8 +130,13 @@ end
 
 local Fail, Success = ActionService.Fail, ActionService.Success
 
-local function hatch(player: Player, _data, eggId: string?)
-	local ok, message = PetService:HatchEgg(player, eggId or "", false)
+-- arg: "<EggId>" or "<EggId>:<count>" (count 1, 3 or 8).
+local function hatch(player: Player, _data, arg: string?)
+	local eggId, count = string.match(arg or "", "^(%w+):?(%d*)$")
+	if not eggId then
+		return Fail("Unknown egg.")
+	end
+	local ok, message = PetService:HatchEggs(player, eggId, tonumber(count) or 1, false)
 	return if ok then Success(nil) else Fail(message)
 end
 

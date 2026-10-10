@@ -409,6 +409,8 @@ def layout_children(b):
         cw = max(cw, w) if cw > 0 else w
         b.canvas = (cw, ch)
         w, h = cw, max(ch, 0)
+        scroll = val(node, "CanvasPosition", [0, 0])
+        y = y - scroll[1]
 
     pad = first(node, "UIPadding")
     if pad:
@@ -487,7 +489,7 @@ def layout_children(b):
 
     if node["ClassName"] == "ScrollingFrame":
         auto = val(node, "AutomaticCanvasSize", "None")
-        content = (max(c.y + c.h for c in out) - y) if out else 0
+        content = (max(c.y + c.h for c in out) - y) if out else 0  # y is already scrolled
         if pad:
             content += udim(pad, "PaddingBottom")[1]
         cw, ch = b.canvas
@@ -1144,19 +1146,35 @@ local UIController = require(game:GetService("StarterPlayer").StarterPlayerScrip
 
 PHONE = "workspace.CurrentCamera.ViewportSize = Vector2.new(844, 390)\n"
 
+# Scenes showing a window: the world behind is blurred.
+BLURRED = {"shop", "shop_2", "shop_3", "shop_4", "shop_5", "pets", "hands", "rebirth", "trails", "boosts", "gifts", "welcomeback", "shop_phone"}
+
 # Scenes rendered at a different screen size (default 1920x1080).
 SIZES = {"hud_phone": (844, 390), "shop_phone": (844, 390)}
 
+def scrolled(window: str, y: int) -> str:
+    return START + f'UIController.Start()\nopenWindow("{window}").Content.CanvasPosition = Vector2.new(0, {y})'
+
+
 SCENES = {
     "hud": START + "UIController.Start()",
+    "shop_2": scrolled("ShopMenu", 560),
+    "shop_3": scrolled("ShopMenu", 1250),
+    "shop_4": scrolled("ShopMenu", 1900),
+    "shop_5": scrolled("ShopMenu", 2400),
     "hud_phone": START + PHONE + "UIController.Start()",
     "shop_phone": START + PHONE + 'UIController.Start()\nopenWindow("ShopMenu")',
     "shop": START + 'UIController.Start()\nopenWindow("ShopMenu")',
-    "pets": START + 'UIController.Start()\nopenWindow("PetsMenu")',
+    "pets": START + 'UIController.Start()\nopenWindow("InventoryMenu")',
+    "hands": START + 'UIController.Start()\nUIController.Menus.Inventory:SetTab("Hands")\nopenWindow("InventoryMenu")',
+    "boosts": START + 'UIController.Start()\nUIController.Menus.Inventory:SetTab("Boosts")\nopenWindow("InventoryMenu")',
     "rebirth": START + 'UIController.Start()\nopenWindow("RebirthMenu")',
     "trails": START + 'UIController.Start()\nopenWindow("TrailsMenu")',
-    "inventory": START + 'UIController.Start()\nopenWindow("InventoryMenu")',
     "gifts": START + 'UIController.Start()\nopenWindow("GiftsMenu")',
+    "eggpanel": START
+    + 'UIController.Start()\nUIController.EggPanel:SetScreenPosition(1060, 540, Vector2.new(1920, 1080))\nUIController.EggPanel:SetEgg("Legendary")',
+    "eggpanel_robux": START
+    + 'UIController.Start()\nUIController.EggPanel:SetScreenPosition(1060, 540, Vector2.new(1920, 1080))\nUIController.EggPanel:SetEgg("Rainbow")',
     "welcomeback": START + "SAMPLE_SESSION.OfflineAmount = 31638\nSAMPLE_SESSION.OfflineSeconds = 5400\nUIController.Start()",
     "toasts": START
     + """UIController.Start()
@@ -1195,10 +1213,12 @@ def backdrop():
 def main(argv):
     names = argv or list(SCENES)
     bg = backdrop()
+    blurred = bg.filter(ImageFilter.GaussianBlur(10))
     for name in names:
         guis = run_scene(SCENES[name])
         out = os.path.join(OUT_DIR, f"{name}.png")
-        render(guis, bg, out, SIZES.get(name, (1920, 1080)))
+        # Windows blur the world behind them (UIController's MenuBlur).
+        render(guis, blurred if name in BLURRED else bg, out, SIZES.get(name, (1920, 1080)))
         print(f"  {name:<12} -> {os.path.relpath(out, ROOT)}")
     return 0
 

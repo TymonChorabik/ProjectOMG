@@ -1,94 +1,590 @@
 --[[
 	ShopMenu.luau
-	Robux shop: every game pass and developer product from Config.Monetization, as studded
-	tiles (name, big icon, green price bar). Owned passes turn grey with a tick.
+	Robux shop laid out like +1 Stone Skipping's: big studded offer cards in sections.
+	  ~ Packs ~          Starter Pack banner (what's inside as chips, slashed old price)
+	  ~ Strength Packs ~ / ~ Wins Packs ~   2-column pack cards
+	  ~ Gamepasses ~     3-column tall cards
+	  ~ Limited Offer ~  Rainbow Egg with its pet odds, buy 1 / 3 / 8
+	  ~ Boosts ~         Boost Bundle + single boosts
+	  ~ Codes ~          code box (RedeemCode)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Formulas = require(Shared.Formulas)
+local NumberFormat = require(Shared.NumberFormat)
 
 local ClientData = require(script.Parent.Parent.Parent.ClientData)
+local Create = require(script.Parent.Parent.Create)
 local MenuWindow = require(script.Parent.Parent.MenuWindow)
 local Theme = require(script.Parent.Parent.Theme)
+local ViewportPreview = require(script.Parent.Parent.ViewportPreview)
 
 local ShopMenu = {}
 
-local TILE = Vector2.new(140, 158)
+local CREAM = Color3.fromRGB(255, 240, 190)
+local GOLD = Color3.fromRGB(255, 176, 30)
 
+local STRENGTH_PACKS = {
+	{ Product = "Strength10K", Title = "Tiny Pack", Count = 1 },
+	{ Product = "Strength100K", Title = "Small Pack", Count = 2 },
+	{ Product = "Strength1M", Title = "Big Pack", Count = 3 },
+	{ Product = "Strength10M", Title = "Huge Pack", Count = 4 },
+}
+local WINS_PACKS = {
+	{ Product = "WinsTiny", Title = "Tiny Pack", Count = 1 },
+	{ Product = "WinsSmall", Title = "Small Pack", Count = 2 },
+	{ Product = "WinsMedium", Title = "Medium Pack", Count = 3 },
+	{ Product = "WinsLarge", Title = "Large Pack", Count = 4 },
+}
 local PASSES = {
 	{ Name = "AutoSmash", Color = Theme.Colors.Red },
-	{ Name = "DoubleStrength", Color = Color3.fromRGB(120, 200, 40) },
+	{ Name = "DoubleStrength", Color = Color3.fromRGB(70, 160, 255) },
 	{ Name = "DoubleWins", Color = Color3.fromRGB(250, 170, 30) },
-	{ Name = "PetSlots", Color = Theme.Colors.Blue },
+	{ Name = "PetSlots", Color = Theme.Colors.Purple },
 	{ Name = "GoldenZone", Color = Color3.fromRGB(240, 190, 30) },
-	{ Name = "DragonZone", Color = Color3.fromRGB(220, 70, 50) },
-	{ Name = "CosmicZone", Color = Theme.Colors.Purple },
+	{ Name = "DragonZone", Color = Color3.fromRGB(230, 90, 70) },
+	{ Name = "CosmicZone", Color = Color3.fromRGB(40, 40, 70) },
 	{ Name = "PhoenixRelic", Color = Color3.fromRGB(255, 120, 40) },
 	{ Name = "LionKing", Rainbow = true },
 }
-local PRODUCTS = {
-	{ Name = "StarterPack", Title = "STARTER PACK", Icon = "🎁", Color = Theme.Colors.Pink },
-	{ Name = "Strength10K", Title = "+10K STRENGTH", Icon = "⚡", Color = Color3.fromRGB(255, 190, 30) },
-	{ Name = "Strength100K", Title = "+100K STRENGTH", Icon = "⚡", Color = Theme.Colors.Red },
-	{ Name = "Strength1M", Title = "+1M STRENGTH", Icon = "⚡", Rainbow = true },
-	{ Name = "RainbowEgg", Title = "RAINBOW EGG", Icon = "🥚", Rainbow = true },
+local BOOSTS = {
+	{ Product = "BoostStrength", Kind = "Strength", Title = "Strength Boost", Color = Color3.fromRGB(235, 70, 80) },
+	{ Product = "BoostWins", Kind = "Wins", Title = "Wins Boost", Color = Color3.fromRGB(250, 175, 30) },
+	{ Product = "BoostLuck", Kind = "Luck", Title = "Luck Boost", Color = Color3.fromRGB(80, 200, 90) },
+}
+
+-- Offsets for piles of 1-4 icons ("more stuff" for bigger packs).
+local PILES = {
+	{ Vector2.new(0, 0) },
+	{ Vector2.new(-20, 8), Vector2.new(20, -6) },
+	{ Vector2.new(-26, 14), Vector2.new(26, 14), Vector2.new(0, -14) },
+	{ Vector2.new(-28, 18), Vector2.new(28, 18), Vector2.new(-14, -14), Vector2.new(16, -10) },
 }
 
 local function price(amount: number): string
 	return `R$ {amount}`
 end
 
+local function pile(parent: Instance, icon: string, count: number, size: number)
+	for index, offset in PILES[math.clamp(count, 1, 4)] do
+		Create.Icon({
+			Text = icon,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, offset.X, 0.5, offset.Y),
+			Size = UDim2.fromOffset(size, size),
+			Rotation = (index % 2 == 0) and 12 or -10,
+			ZIndex = 5 + index,
+			Parent = parent,
+		})
+	end
+end
+
+-- Small frosted square showing one thing inside a pack ("x10K" etc.).
+local function chip(parent: Instance, order: number, icon: string?, petId: string?, label: string)
+	local frame = Create("Frame", {
+		Name = "Chip",
+		LayoutOrder = order,
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.6,
+		Size = UDim2.fromOffset(78, 78),
+		ZIndex = 5,
+		Parent = parent,
+	}, { Create.Corner(UDim.new(0, 12)), Create.Stroke(2.5, Color3.new(1, 1, 1), 0.2) })
+	local art = Create("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(6, 2),
+		Size = UDim2.new(1, -12, 1, -24),
+		ZIndex = 6,
+		Parent = frame,
+	})
+	if petId then
+		ViewportPreview.Pet(art, petId, 1.2)
+	else
+		Create.Icon({ Text = icon or "", Size = UDim2.fromScale(1, 1), ZIndex = 6, Parent = art })
+	end
+	Create.Label({
+		Text = label,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -3),
+		Size = UDim2.new(1, -6, 0, 24),
+		StrokeThickness = 2.5,
+		ZIndex = 7,
+		Parent = frame,
+	})
+end
+
 function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 	local window = MenuWindow.new({ Title = "Shop", Icon = "🛒", Parent = parent })
+	local content = window.Content
 	local passes, products = Config.Monetization.GamePasses, Config.Monetization.Products
-	local passTiles, productTiles = {}, {}
+	local passButtons: { [string]: any } = {}
+	local starterButton
 
-	MenuWindow.Header(window.Content, 1, "Game Passes")
-	local passGrid = MenuWindow.Grid(window.Content, 2, TILE)
-	for order, entry in PASSES do
+	local function buy(key: string)
+		return function()
+			ctx.Purchase(key)
+		end
+	end
+
+	----------------------------------------------------------------------------
+	-- Packs: Starter Pack banner
+	----------------------------------------------------------------------------
+	MenuWindow.Header(content, 1, "Packs")
+	do
+		local starter = products.StarterPack
+		local card = MenuWindow.Card({ Parent = content, Order = 2, Size = UDim2.new(1, -8, 0, 214), Rainbow = true })
+		local art = Create("Frame", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 12, 0.5, 0),
+			Size = UDim2.fromOffset(190, 190),
+			ZIndex = 4,
+			Parent = card,
+		})
+		ViewportPreview.Pet(art, starter.Pet, 1.15)
+		Create.Icon({
+			Text = "⚡",
+			Position = UDim2.fromOffset(0, 0),
+			Size = UDim2.fromOffset(64, 64),
+			Rotation = -12,
+			ZIndex = 6,
+			Parent = art,
+		})
+		Create.Label({
+			Text = starter.Name,
+			TextColor3 = CREAM,
+			Position = UDim2.fromOffset(212, 10),
+			Size = UDim2.new(1, -226, 0, 58),
+			StrokeThickness = 5,
+			MaxTextSize = 56,
+			ZIndex = 6,
+			Parent = card,
+		})
+		local chips = Create("Frame", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(212, 64),
+			Size = UDim2.new(1, -226, 0, 78),
+			ZIndex = 5,
+			Parent = card,
+		}, {
+			Create("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				Padding = UDim.new(0, 10),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+		})
+		chip(chips, 1, nil, starter.Pet, "x1")
+		chip(chips, 2, "⚡", nil, `x{NumberFormat.Abbreviate(starter.Strength)}`)
+		chip(chips, 3, "🏆", nil, `x{NumberFormat.Abbreviate(starter.Wins)}`)
+		MenuWindow.WasPrice(card, price(starter.WasPrice), {
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -186, 1, -16),
+		})
+		starterButton = MenuWindow.PriceButton({
+			Parent = card,
+			Text = price(starter.Price),
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -16, 1, -10),
+		})
+		starterButton.Activated:Connect(buy("product:StarterPack"))
+	end
+
+	----------------------------------------------------------------------------
+	-- Strength + Wins packs (2 columns)
+	----------------------------------------------------------------------------
+	local function packSection(order: number, title: string, packs, icon: string, color: Color3, unit: string)
+		MenuWindow.Header(content, order, title)
+		local grid = MenuWindow.Grid(content, order + 1, Vector2.new(318, 176), 12)
+		for index, pack in packs do
+			local product = products[pack.Product]
+			local card = MenuWindow.Card({ Parent = grid, Order = index, Size = UDim2.fromScale(1, 1), Color = color })
+			Create.Label({
+				Text = pack.Title,
+				TextColor3 = CREAM,
+				Position = UDim2.fromOffset(10, 8),
+				Size = UDim2.new(1, -20, 0, 44),
+				StrokeThickness = 4.5,
+				MaxTextSize = 40,
+				ZIndex = 6,
+				Parent = card,
+			})
+			local art = Create("Frame", {
+				BackgroundTransparency = 1,
+				Position = UDim2.fromOffset(12, 52),
+				Size = UDim2.fromOffset(130, 112),
+				ZIndex = 5,
+				Parent = card,
+			})
+			pile(art, icon, pack.Count, 80)
+			Create.Label({
+				Text = `+{NumberFormat.Abbreviate(product[unit])} {unit}`,
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -12, 0, 62),
+				Size = UDim2.fromOffset(170, 36),
+				TextXAlignment = Enum.TextXAlignment.Right,
+				StrokeThickness = 3.5,
+				ZIndex = 6,
+				Parent = card,
+			})
+			if product.WasPrice then
+				MenuWindow.WasPrice(card, price(product.WasPrice), {
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, -168, 0, 112),
+					Size = UDim2.fromOffset(90, 32),
+				})
+			end
+			local button = MenuWindow.PriceButton({
+				Parent = card,
+				Text = price(product.Price),
+				Size = UDim2.fromOffset(150, 56),
+				AnchorPoint = Vector2.new(1, 1),
+				Position = UDim2.new(1, -12, 1, -10),
+			})
+			button.Activated:Connect(buy("product:" .. pack.Product))
+		end
+	end
+	packSection(3, "Strength Packs", STRENGTH_PACKS, "⚡", Color3.fromRGB(70, 150, 255), "Strength")
+	packSection(5, "Wins Packs", WINS_PACKS, "🏆", GOLD, "Wins")
+
+	----------------------------------------------------------------------------
+	-- Gamepasses (3 columns)
+	----------------------------------------------------------------------------
+	MenuWindow.Header(content, 7, "Gamepasses")
+	local passGrid = MenuWindow.Grid(content, 8, Vector2.new(208, 238), 12)
+	for index, entry in PASSES do
 		local pass = passes[entry.Name]
-		local tile = MenuWindow.Tile({
+		local card = MenuWindow.Card({
 			Parent = passGrid,
-			Order = order,
-			Color = entry.Color or Theme.Colors.Blue,
+			Order = index,
+			Size = UDim2.fromScale(1, 1),
+			Color = entry.Color,
 			Rainbow = entry.Rainbow,
-			Title = string.upper(pass.Name),
-			Icon = pass.Icon,
-			Bar = price(pass.Price),
-			BarColor = Theme.Colors.Green,
 		})
-		tile.Activated:Connect(function()
-			ctx.Purchase("pass:" .. entry.Name)
-		end)
-		passTiles[entry.Name] = tile
+		Create.Label({
+			Text = pass.Name,
+			Position = UDim2.fromOffset(8, 8),
+			Size = UDim2.new(1, -16, 0, 36),
+			StrokeThickness = 4,
+			MaxTextSize = 30,
+			ZIndex = 6,
+			Parent = card,
+		})
+		Create.Icon({
+			Text = pass.Icon,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0, 108),
+			Size = UDim2.fromOffset(110, 110),
+			ZIndex = 5,
+			Parent = card,
+		})
+		Create.Label({
+			Text = pass.Description,
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -72),
+			Size = UDim2.new(1, -16, 0, 22),
+			StrokeThickness = 2.5,
+			ZIndex = 6,
+			Parent = card,
+		})
+		local button = MenuWindow.PriceButton({
+			Parent = card,
+			Text = price(pass.Price),
+			Size = UDim2.new(1, -24, 0, 58),
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -10),
+		})
+		button.Activated:Connect(buy("pass:" .. entry.Name))
+		passButtons[entry.Name] = button
 	end
 
-	MenuWindow.Header(window.Content, 3, "Packs")
-	local productGrid = MenuWindow.Grid(window.Content, 4, TILE)
-	for order, entry in PRODUCTS do
-		local tile = MenuWindow.Tile({
-			Parent = productGrid,
-			Order = order,
-			Color = entry.Color or Theme.Colors.Blue,
-			Rainbow = entry.Rainbow,
-			Title = entry.Title,
-			Icon = entry.Icon,
-			Bar = price(products[entry.Name].Price),
-			BarColor = Theme.Colors.Green,
+	----------------------------------------------------------------------------
+	-- Limited offer: Rainbow Egg + odds
+	----------------------------------------------------------------------------
+	MenuWindow.Header(content, 9, "Limited Offer")
+	do
+		local egg = Formulas.GetEgg("Rainbow")
+		local card = MenuWindow.Card({
+			Parent = content,
+			Order = 10,
+			Size = UDim2.new(1, -8, 0, 252),
+			Color = Color3.fromRGB(110, 220, 60),
 		})
-		tile.Activated:Connect(function()
-			ctx.Purchase("product:" .. entry.Name)
-		end)
-		productTiles[entry.Name] = tile
+		Create.Label({
+			Text = egg and egg.Name or "Rainbow Egg",
+			TextColor3 = CREAM,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Position = UDim2.fromOffset(18, 8),
+			Size = UDim2.new(0.6, 0, 0, 52),
+			StrokeThickness = 5,
+			MaxTextSize = 48,
+			ZIndex = 6,
+			Parent = card,
+		})
+		local eggArt = Create("Frame", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(6, 52),
+			Size = UDim2.fromOffset(170, 176),
+			ZIndex = 4,
+			Parent = card,
+		})
+		ViewportPreview.Egg(eggArt, if egg then egg.Color else Color3.fromRGB(255, 120, 220))
+		local odds = Create("Frame", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(186, 58),
+			Size = UDim2.new(1, -200, 0, 104),
+			ZIndex = 5,
+			Parent = card,
+		}, {
+			Create("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				Padding = UDim.new(0, 12),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+		})
+		for index, entry in Formulas.GetEggOdds("Rainbow") do
+			local def = Config.Pets[entry.PetId]
+			local slot = Create("Frame", {
+				LayoutOrder = index,
+				BackgroundTransparency = 1,
+				Size = UDim2.fromOffset(96, 104),
+				ZIndex = 5,
+				Parent = odds,
+			})
+			local art = Create("Frame", {
+				BackgroundColor3 = if def then Config.Rarities[def.Rarity].Color else Color3.new(1, 1, 1),
+				Size = UDim2.fromOffset(96, 80),
+				ZIndex = 5,
+				Parent = slot,
+			}, { Create.Corner(UDim.new(0, 12)), Create.Stroke(3), Create.Bevel(0.3) })
+			ViewportPreview.Pet(art, entry.PetId, 1.3)
+			Create.Label({
+				Text = `{math.floor(entry.Chance * 100 + 0.5)}%`,
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.new(0.5, 0, 1, 0),
+				Size = UDim2.new(1, 0, 0, 30),
+				StrokeThickness = 3.5,
+				ZIndex = 8,
+				Parent = slot,
+			})
+		end
+		-- Buy 1 / 3 / 8 at once.
+		local row = Create("Frame", {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0, 186, 1, -70),
+			Size = UDim2.new(1, -200, 0, 60),
+			ZIndex = 5,
+			Parent = card,
+		}, {
+			Create("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				Padding = UDim.new(0, 8),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+		})
+		for order, count in Config.PetsConfig.HatchCounts do
+			local productName = if count == 1
+				then "RainbowEgg"
+				elseif egg and egg.MultiProducts then egg.MultiProducts[count]
+				else nil
+			local product = productName and products[productName]
+			if product then
+				local button = MenuWindow.PriceButton({
+					Parent = row,
+					Text = `{count}x  {price(product.Price)}`,
+					Size = UDim2.fromOffset(146, 58),
+					MaxTextSize = 26,
+				})
+				button.Instance.LayoutOrder = order
+				button.Activated:Connect(buy("product:" .. productName))
+			end
+		end
 	end
 
-	local function setOwned(tile, owned: boolean, label: string)
-		tile.BarText.Text = if owned then "OWNED" else label
-		tile.Bar.BackgroundColor3 = if owned then Theme.Colors.GrayDark else Theme.Colors.Green
-		tile.Corner.Text = if owned then "✅" else ""
-		tile.Shade.Visible = owned
+	----------------------------------------------------------------------------
+	-- Boosts
+	----------------------------------------------------------------------------
+	MenuWindow.Header(content, 11, "Boosts")
+	do
+		local bundle = products.BoostBundle
+		local card = MenuWindow.Card({
+			Parent = content,
+			Order = 12,
+			Size = UDim2.new(1, -8, 0, 190),
+			Gradient = ColorSequence.new(Color3.fromRGB(40, 210, 120), Color3.fromRGB(40, 110, 255)),
+		})
+		pile(
+			Create("Frame", {
+				BackgroundTransparency = 1,
+				Position = UDim2.fromOffset(16, 30),
+				Size = UDim2.fromOffset(130, 130),
+				ZIndex = 4,
+				Parent = card,
+			}),
+			"🧪",
+			3,
+			84
+		)
+		Create.Label({
+			Text = "Boost\nBundle",
+			TextColor3 = CREAM,
+			Position = UDim2.fromOffset(150, 20),
+			Size = UDim2.fromOffset(220, 150),
+			StrokeThickness = 5,
+			MaxTextSize = 58,
+			ZIndex = 6,
+			Parent = card,
+		})
+		local lines = {}
+		for _, boost in bundle.Boosts do
+			table.insert(lines, `- {Config.Boosts[boost.Kind].Name} ({boost.Minutes} min)`)
+		end
+		Create.Label({
+			Text = table.concat(lines, "\n"),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -16, 0, 16),
+			Size = UDim2.fromOffset(250, 90),
+			StrokeThickness = 3,
+			ZIndex = 6,
+			Parent = card,
+		})
+		MenuWindow.WasPrice(card, price(bundle.WasPrice), {
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -186, 1, -18),
+		})
+		local button = MenuWindow.PriceButton({
+			Parent = card,
+			Text = price(bundle.Price),
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -16, 1, -12),
+		})
+		button.Activated:Connect(buy("product:BoostBundle"))
+	end
+	local boostGrid = MenuWindow.Grid(content, 13, Vector2.new(208, 232), 12)
+	for index, entry in BOOSTS do
+		local product = products[entry.Product]
+		local boost = Config.Boosts[entry.Kind]
+		local card =
+			MenuWindow.Card({ Parent = boostGrid, Order = index, Size = UDim2.fromScale(1, 1), Color = entry.Color })
+		Create.Label({
+			Text = entry.Title,
+			TextColor3 = CREAM,
+			Position = UDim2.fromOffset(8, 8),
+			Size = UDim2.new(1, -16, 0, 36),
+			StrokeThickness = 4,
+			MaxTextSize = 30,
+			ZIndex = 6,
+			Parent = card,
+		})
+		Create.Icon({
+			Text = boost.Icon,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0, 96),
+			Size = UDim2.fromOffset(90, 90),
+			ZIndex = 5,
+			Parent = card,
+		})
+		Create.Label({
+			Text = `{string.upper(boost.Name)}\nfor {product.Boosts[1].Minutes} min`,
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -72),
+			Size = UDim2.new(1, -16, 0, 42),
+			StrokeThickness = 3,
+			ZIndex = 6,
+			Parent = card,
+		})
+		local button = MenuWindow.PriceButton({
+			Parent = card,
+			Text = price(product.Price),
+			Size = UDim2.new(1, -24, 0, 56),
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -10),
+		})
+		button.Activated:Connect(buy("product:" .. entry.Product))
+	end
+
+	----------------------------------------------------------------------------
+	-- Codes
+	----------------------------------------------------------------------------
+	MenuWindow.Header(content, 14, "Codes")
+	do
+		local card = MenuWindow.Card({
+			Parent = content,
+			Order = 15,
+			Size = UDim2.new(1, -8, 0, 196),
+			Gradient = ColorSequence.new(Color3.fromRGB(40, 210, 120), Color3.fromRGB(40, 110, 255)),
+		})
+		Create.Label({
+			Text = "Redeem codes for Free Strength,\nWins & Boosts!",
+			Position = UDim2.fromOffset(20, 14),
+			Size = UDim2.new(1, -40, 0, 76),
+			StrokeThickness = 4,
+			MaxTextSize = 36,
+			ZIndex = 6,
+			Parent = card,
+		})
+		local box = Create("TextBox", {
+			Name = "CodeBox",
+			Text = "",
+			PlaceholderText = "Enter Code Here...",
+			PlaceholderColor3 = Color3.fromRGB(180, 200, 240),
+			TextColor3 = Theme.Colors.White,
+			Font = Theme.Fonts.Body,
+			TextScaled = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ClearTextOnFocus = false,
+			BackgroundColor3 = Color3.fromRGB(25, 60, 150),
+			Position = UDim2.fromOffset(24, 104),
+			Size = UDim2.new(1, -232, 0, 66),
+			ZIndex = 6,
+			Parent = card,
+		}, {
+			Create.Corner(UDim.new(0, 12)),
+			Create.Stroke(3.5),
+			Create("UIPadding", {
+				PaddingLeft = UDim.new(0, 16),
+				PaddingRight = UDim.new(0, 12),
+				PaddingTop = UDim.new(0, 14),
+				PaddingBottom = UDim.new(0, 14),
+			}),
+		})
+		local redeem = MenuWindow.PriceButton({
+			Parent = card,
+			Text = "Redeem",
+			Size = UDim2.fromOffset(180, 70),
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -24, 0, 102),
+			MaxTextSize = 38,
+		})
+		local redeeming = false
+		redeem.Activated:Connect(function()
+			if redeeming or box.Text == "" then
+				return
+			end
+			redeeming = true
+			task.spawn(function()
+				local result = ctx.RequestAsync("RedeemCode", string.sub(box.Text, 1, 32))
+				if result and result.ok then
+					box.Text = ""
+				end
+				redeeming = false
+			end)
+		end)
+	end
+
+	----------------------------------------------------------------------------
+	-- Owned state
+	----------------------------------------------------------------------------
+	local function setOwned(button, owned: boolean, label: string)
+		button:SetText(if owned then "OWNED" else label)
+		button:SetColor(if owned then Theme.Colors.GrayDark else Theme.Colors.Green)
+		button:SetEnabled(not owned)
 	end
 
 	local function refresh()
@@ -96,12 +592,10 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 		if not data then
 			return
 		end
-		for name, tile in passTiles do
-			setOwned(tile, data.Passes[name] == true, price(passes[name].Price))
+		for name, button in passButtons do
+			setOwned(button, data.Passes[name] == true, price(passes[name].Price))
 		end
-		for name, tile in productTiles do
-			setOwned(tile, products[name].OneTime == true and data.StarterPackBought, price(products[name].Price))
-		end
+		setOwned(starterButton, data.StarterPackBought == true, price(products.StarterPack.Price))
 	end
 
 	ClientData.Changed:Connect(function(key)
@@ -109,7 +603,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 			refresh()
 		end
 	end)
-	window.Instance:GetPropertyChangedSignal("Visible"):Connect(refresh)
+	window.Opened:Connect(refresh)
 	refresh()
 	return window
 end

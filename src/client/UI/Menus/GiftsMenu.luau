@@ -1,8 +1,8 @@
 --[[
 	GiftsMenu.luau
-	Playtime rewards: a 4x3 grid of studded tiles (blue, purple, orange rows, rainbow last
-	gift). Each shows the reward and a red countdown bar; ready gifts say CLAIM!, claimed ones
-	turn dark blue with a big tick.
+	Playtime rewards: a 4x3 grid of big studded tiles (blue, purple, orange rows, rainbow last
+	gift). Each shows the reward and a red countdown bar; ready gifts say CLAIM! and claimed
+	ones dim down with a big green tick over the icon (like +1 Stone Skipping).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,8 +13,8 @@ local Formulas = require(Shared.Formulas)
 local NumberFormat = require(Shared.NumberFormat)
 
 local ClientData = require(script.Parent.Parent.Parent.ClientData)
+local Create = require(script.Parent.Parent.Create)
 local MenuWindow = require(script.Parent.Parent.MenuWindow)
-local StudPanel = require(script.Parent.Parent.StudPanel)
 local Theme = require(script.Parent.Parent.Theme)
 
 local GiftsMenu = {}
@@ -71,10 +71,10 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 		Title = "Playtime Rewards",
 		Name = "Gifts",
 		Icon = "🎁",
-		Size = Vector2.new(660, 500),
+		Size = Vector2.new(780, 580),
 		Parent = parent,
 	})
-	local grid = MenuWindow.Grid(window.Content, 1, Vector2.new(140, 130))
+	local grid = MenuWindow.Grid(window.Content, 1, Vector2.new(170, 150), 12)
 
 	local tiles = {}
 	local count = #Config.PlaytimeRewards
@@ -89,14 +89,31 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 			Icon = ICONS[reward.Kind] or "🎁",
 			Bar = "",
 		})
+		tile.Title.Size = UDim2.new(1, -12, 0, 30)
+		local constraint = tile.Title:FindFirstChildOfClass("UITextSizeConstraint")
+		if constraint then
+			constraint.MaxTextSize = 26
+		end
+		tile.Bar.Size = UDim2.new(1, -18, 0, 36)
+		tile.Art.Position = UDim2.new(0.5, 0, 0, 36)
+		tile.Art.Size = UDim2.new(1, -40, 1, -84)
+		local check = Create.Icon({
+			Name = "Check",
+			Text = "✅",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(84, 84),
+			Rotation = -8,
+			Visible = false,
+			ZIndex = 9,
+			Parent = tile.Face,
+		})
 		tile.Activated:Connect(function()
 			ctx.ClaimGift(index)
 		end)
 		tiles[index] = {
+			Check = check,
 			Tile = tile,
-			Color = ROW_COLORS[math.clamp(math.ceil(index / 4), 1, #ROW_COLORS)],
-			Rainbow = rainbow,
-			Claimed = false,
 		}
 	end
 
@@ -110,22 +127,12 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 			tile.Title.Text = rewardTitle(reward, data)
 			local claimed = session ~= nil and session.Claimed[index] == true
 			local remaining = reward.Minutes * 60 - elapsed
-			if claimed ~= entry.Claimed then
-				entry.Claimed = claimed
-				if claimed then
-					-- Claimed: dark blue tile with a big tick, like the reference.
-					tile.Button:SetColor(Theme.Colors.Navy)
-				elseif entry.Rainbow then
-					StudPanel.Paint(tile.Face, Color3.new(1, 1, 1), true)
-				else
-					tile.Button:SetColor(entry.Color)
-				end
-			end
+			-- Claimed: the tile dims and a big tick sits over the icon.
+			tile.Shade.Visible = claimed
+			entry.Check.Visible = claimed
 			if claimed then
-				tile.Icon.Text = "✅"
 				tile.Bar.Visible = false
 			else
-				tile.Icon.Text = ICONS[reward.Kind] or "🎁"
 				tile.Bar.Visible = true
 				if remaining <= 0 then
 					tile.BarText.Text = "CLAIM!"

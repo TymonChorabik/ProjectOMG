@@ -29,11 +29,15 @@ One big studded hub, laid out like *+1 Stone Skipping*:
 
 <sub>Flat-shaded previews of `Workspace.Map` (rendered by `tools/mapgen/render_preview.py`). In Studio you see the real map with studs, lighting and effects.</sub>
 
-| HUD | Playtime Rewards | Shop |
+| HUD | Shop | Shop (scrolled) |
 |---|---|---|
-| ![HUD](docs/ui/hud.png) | ![Gifts](docs/ui/gifts.png) | ![Shop](docs/ui/shop.png) |
-| **Pets** | **Rebirth** | **Welcome Back** |
-| ![Pets](docs/ui/pets.png) | ![Rebirth](docs/ui/rebirth.png) | ![Welcome back](docs/ui/welcomeback.png) |
+| ![HUD](docs/ui/hud.png) | ![Shop](docs/ui/shop.png) | ![Shop](docs/ui/shop_3.png) |
+| **My Pets** | **My Hands** | **My Boosts** |
+| ![Pets](docs/ui/pets.png) | ![Hands](docs/ui/hands.png) | ![Boosts](docs/ui/boosts.png) |
+| **Rebirth** | **Trails** | **Playtime Rewards** |
+| ![Rebirth](docs/ui/rebirth.png) | ![Trails](docs/ui/trails.png) | ![Gifts](docs/ui/gifts.png) |
+| **Egg panel** | **Rainbow Egg panel** | **Welcome Back** |
+| ![Egg panel](docs/ui/eggpanel.png) | ![Rainbow egg panel](docs/ui/eggpanel_robux.png) | ![Welcome back](docs/ui/welcomeback.png) |
 
 <sub>The real UI code rendered offline by `tools/uipreview/render_ui.py` (an approximation of Roblox's renderer: emoji and 3D pet previews will look slightly different in game).</sub>
 
@@ -56,9 +60,10 @@ in-memory data and shows a "progress won't be saved" message. Leaderboards also 
 |---|---|
 | Train (+Strength) | Stand on the pad of a training floor. Step off to stop |
 | Smash the wall | Stand on the yellow launch pad and press **E** (or tap the **Smash!** prompt) |
-| Equip hand items | Walk up to a pedestal and press **E**, or use **Inventory** |
-| Hatch eggs | Walk up to an egg and press **E** |
-| Menus | Shop, Rebirth, Pets, Trails, Inventory, Gifts (left side) |
+| Equip hand items | Walk up to a pedestal and press **E**, or use **Inventory → Hands** |
+| Hatch eggs | Walk up to an egg: its panel shows the pet chances. **Hatch 1 / 3 / 8** (keys **E / R / T**) |
+| Menus | Shop, Rebirth, Pets, Trails, Inventory, Gifts (left side). Windows blur the world and hide the HUD |
+| Codes | Shop → Codes: `RELEASE`, `KUNGFU`, `CHOP` (edit `Config.Codes`) |
 
 All numbers (zone multipliers, item bonuses, wall toughness, wins per biome, egg odds, pet
 bonuses, rebirth cost, gifts, prices) live in **`src/shared/Config.luau`**. In Studio you'll find
@@ -106,7 +111,8 @@ Frame, set **Image** to the stud texture, **ScaleType = Tile** and
 
 Everything in the shop is built and shown in the game: Auto Smash, 2x Strength, 2x Wins, +2 Pet
 Slots, the three Robux training zones, Phoenix Relic, the Lion King pet, Strength packs
-(+10K / +100K / +1M), Rainbow Egg, Starter Pack and the x3 offline claim.
+(+10K / +100K / +1M / +10M), Wins packs (Tiny / Small / Medium / Large), 2x boosts and the Boost
+Bundle, Skip Rebirth, the Rainbow Egg (x1 / x3 / x8), Starter Pack and the x3 offline claim.
 
 * **In Studio** buying anything grants it instantly (`Config.Monetization.StudioTestPurchases = true`),
   so you can test every feature for free.
@@ -151,9 +157,9 @@ src/server/            → ServerScriptService.Server
   Services/WorldService        loads Workspace.Map, lighting, zone detection
   Services/TrainingService     training floors: Strength for standing on an unlocked pad
   Services/LaneService         board wall runs: walls broken, distance, wins
-  Services/PetService          eggs, hatching, equip / delete
+  Services/PetService          eggs, hatching (1 / 3 / 8 at once), equip / delete
   Services/ProgressService     wins, hand items, trails, rebirth
-  Services/RewardsService      gifts, offline training, boosts
+  Services/RewardsService      gifts, offline training, boosts, codes
   Services/MonetizationService passes, products, ProcessReceipt
   Services/LeaderboardService  global top-10 boards
   Services/SocialService       friend boost
@@ -166,10 +172,11 @@ src/client/            → StarterPlayerScripts.Client
                                shatter, other players on your pad are hidden
   Controllers/LaneController   the wall run: flight, shattering walls, camera, distance
   Controllers/PetController    everyone's pets following them
-  Controllers/WorldController  pedestal / egg / showcase prompts, live signs
+  Controllers/WorldController  pedestal / showcase prompts, egg panel placement, live signs
   Controllers/UIController     HUD + windows wiring
   UI/                          Theme, StudBackground (square studs), StudPanel, ChunkyButton,
-                               MenuWindow (window + tiles), Hud, Menus/*, HatchOverlay, WelcomeBack
+                               MenuWindow (window, cards, tiles), Hud, Menus/* (Shop, Rebirth,
+                               Inventory tabs, Trails, Gifts), EggPanel, HatchOverlay, WelcomeBack
 src/workspace/Map/     the baked hub map
 assets/textures/       stud_overlay.png (upload this), checker_overlay.png, stud_tile.png
 tools/                 stud texture generator, map baker + preview renderer,

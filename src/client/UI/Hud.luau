@@ -511,6 +511,16 @@ function Hud.new(gui: ScreenGui)
 	return hud
 end
 
+-- Hides / shows the whole HUD (windows take the stage while open).
+function Hud.SetVisible(hud, visible: boolean)
+	for _, uiScale in hud.Scales do
+		local frame = uiScale.Parent
+		if frame and frame:IsA("GuiObject") then
+			frame.Visible = visible
+		end
+	end
+end
+
 -- Level bar: progress 0..1 fills the bar; turns green at max level.
 function Hud.SetLevel(hud, level: number, progress: number, rightText: string, maxed: boolean)
 	hud.LevelLabel.Text = `Level {level}`

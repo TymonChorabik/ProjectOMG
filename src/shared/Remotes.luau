@@ -10,7 +10,7 @@
 	Server -> Client
 		DataSync (RemoteEvent)        (changes: { [string]: any })
 		ChopResult (RemoteEvent)      (gain: number)  -- one training chop at your dojo station
-		Hatched (RemoteEvent)         (eggId: string, petId: string, uid: string)
+		Hatched (RemoteEvent)         (eggId: string, petIds: { string })  -- 1, 3 or 8 pets
 		Notify (RemoteEvent)          (message: string, kind: "Info" | "Success" | "Error")
 ]]
 

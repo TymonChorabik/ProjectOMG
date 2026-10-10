@@ -2,7 +2,8 @@
 	WelcomeBack.luau
 	"Welcome Back! You trained while you were offline" popup (as in +1 Stone Skipping): dark
 	translucent card, outlined title with a clock icon, the offline Strength in gold, a rainbow
-	x3 (Robux) button and a green Claim! button.
+	x3 (Robux) button and a green Claim! button. Shown on the (scaled) menu layer so it is as
+	big as the windows.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,7 +23,7 @@ local WelcomeBack = {}
 function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onClaim: (boolean) -> ())
 	local panel = Create("Frame", {
 		Name = "WelcomeBack",
-		Size = UDim2.fromOffset(620, 440),
+		Size = UDim2.fromOffset(640, 450),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = Theme.Colors.Window,
@@ -36,8 +37,8 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 	Create.Icon({
 		Text = "⏰",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromOffset(40, 6),
-		Size = UDim2.fromOffset(96, 96),
+		Position = UDim2.fromOffset(34, 4),
+		Size = UDim2.fromOffset(116, 116),
 		Rotation = -10,
 		ZIndex = 22,
 		Parent = panel,
@@ -45,10 +46,10 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 	Create.Label({
 		Text = "Welcome Back!",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 30, 0, 4),
-		Size = UDim2.new(1, -120, 0, 70),
-		StrokeThickness = 5,
-		MaxTextSize = 60,
+		Position = UDim2.new(0.5, 20, 0, -6),
+		Size = UDim2.new(1, -150, 0, 86),
+		StrokeThickness = 5.5,
+		MaxTextSize = 70,
 		ZIndex = 21,
 		Parent = panel,
 	})
@@ -57,8 +58,9 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 	Create.Label({
 		Text = `You trained while you were offline ({hours}h {minutes}m):`,
 		Position = UDim2.fromOffset(24, 50),
-		Size = UDim2.new(1, -48, 0, 30),
-		StrokeThickness = 3,
+		Size = UDim2.new(1, -48, 0, 32),
+		StrokeThickness = 3.5,
+		MaxTextSize = 30,
 		ZIndex = 21,
 		Parent = panel,
 	})
@@ -94,8 +96,9 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 		Text = `+{NumberFormat.Commas(amount)} STRENGTH`,
 		TextColor3 = Theme.Colors.Gold,
 		Position = UDim2.fromOffset(24, 250),
-		Size = UDim2.new(1, -48, 0, 52),
-		StrokeThickness = 4.5,
+		Size = UDim2.new(1, -48, 0, 60),
+		StrokeThickness = 5,
+		MaxTextSize = 56,
 		ZIndex = 21,
 		Parent = panel,
 	})

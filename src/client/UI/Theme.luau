@@ -46,7 +46,7 @@ Theme.Fonts = {
 Theme.CornerRadius = UDim.new(0, 12)
 Theme.StrokeThickness = 3
 Theme.ButtonDepth = 4 -- px of "plastic" below each chunky button
-Theme.WindowTransparency = 0.12
+Theme.WindowTransparency = 0.38 -- window bodies: dark glass, the world shows through
 
 -- Rainbow used by premium buttons (+1M pack, x3 offline claim, Rainbow Egg).
 Theme.Rainbow = ColorSequence.new({

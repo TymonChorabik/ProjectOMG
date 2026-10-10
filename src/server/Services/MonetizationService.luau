@@ -103,8 +103,8 @@ function MonetizationService:GrantProduct(player: Player, productName: string): 
 		return false
 	end
 
-	if productName == "RainbowEgg" then
-		local ok, message = PetService:HatchEgg(player, "Rainbow", true)
+	if product.Egg then
+		local ok, message = PetService:HatchEggs(player, product.Egg, product.Count or 1, true)
 		if not ok then
 			ActionService:Notify(player, message, "Error")
 		end
@@ -127,6 +127,16 @@ function MonetizationService:GrantProduct(player: Player, productName: string): 
 	end
 	if product.Pet then
 		PetService:GivePet(player, product.Pet)
+	end
+	if product.Boosts then
+		for _, boost in product.Boosts do
+			RewardsService:GrantBoost(player, boost.Kind, boost.Minutes * 60)
+		end
+	end
+	if product.Rebirth then
+		local ok, message = ProgressService:Rebirth(player, true)
+		ActionService:Notify(player, message, if ok then "Success" else "Error")
+		return ok
 	end
 	ActionService:Notify(player, `🎉 {product.Name} delivered!`, "Success")
 	return true

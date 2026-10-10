@@ -511,6 +511,7 @@ Config.Eggs = {
 		Id = "Rainbow",
 		Name = "Rainbow Egg",
 		Product = "RainbowEgg",
+		MultiProducts = { [3] = "RainbowEgg3", [8] = "RainbowEgg8" }, -- Hatch 3 / Hatch 8
 		Color = Color3.fromRGB(255, 120, 220),
 		Rainbow = true,
 		Pool = { RainbowUnicorn = 60, GalaxyCat = 35, DragonKing = 5 },
@@ -522,6 +523,7 @@ Config.PetsConfig = {
 	ExtraSlotsPass = "PetSlots",
 	ExtraSlots = 2,
 	MaxInventory = 60,
+	HatchCounts = { 1, 3, 8 }, -- the egg panel's Hatch 1 / Hatch 3 / Hatch 8 buttons
 	LuckBoostMultiplier = 2, -- the 2x Luck boost multiplies the weight of every non-Common pet
 }
 
@@ -684,15 +686,46 @@ Config.Monetization = {
 		LionKing = { Id = 0, Price = 799, Name = "Lion King", Icon = "🦁", Description = "Pet: always 1000% better" },
 	},
 
+	-- Products: Strength / Wins add currency, Boosts add timed 2x boosts ({ Kind, Minutes }),
+	-- Rebirth = true performs a rebirth without the level requirement, Egg + Count hatches that
+	-- many eggs. WasPrice is only shown (slashed) next to the price in the shop.
 	Products = {
 		Strength10K = { Id = 0, Price = 11, Name = "+10K Strength", Strength = 10_000 },
 		Strength100K = { Id = 0, Price = 45, Name = "+100K Strength", Strength = 100_000 },
 		Strength1M = { Id = 0, Price = 95, Name = "+1M Strength", Strength = 1_000_000 },
-		RainbowEgg = { Id = 0, Price = 45, Name = "Rainbow Egg" },
+		Strength10M = { Id = 0, Price = 199, Name = "+10M Strength", Strength = 10_000_000 },
+		WinsTiny = { Id = 0, Price = 25, Name = "Tiny Wins Pack", Wins = 2_500 },
+		WinsSmall = { Id = 0, Price = 59, Name = "Small Wins Pack", Wins = 10_000 },
+		WinsMedium = { Id = 0, Price = 115, Name = "Medium Wins Pack", Wins = 50_000 },
+		WinsLarge = { Id = 0, Price = 229, Name = "Large Wins Pack", Wins = 200_000, WasPrice = 299 },
+		BoostStrength = {
+			Id = 0,
+			Price = 29,
+			Name = "2x Strength Boost",
+			Boosts = { { Kind = "Strength", Minutes = 10 } },
+		},
+		BoostWins = { Id = 0, Price = 29, Name = "2x Wins Boost", Boosts = { { Kind = "Wins", Minutes = 10 } } },
+		BoostLuck = { Id = 0, Price = 29, Name = "2x Luck Boost", Boosts = { { Kind = "Luck", Minutes = 10 } } },
+		BoostBundle = {
+			Id = 0,
+			Price = 95,
+			WasPrice = 199,
+			Name = "Boost Bundle",
+			Boosts = {
+				{ Kind = "Strength", Minutes = 20 },
+				{ Kind = "Wins", Minutes = 20 },
+				{ Kind = "Luck", Minutes = 20 },
+			},
+		},
+		SkipRebirth = { Id = 0, Price = 49, Name = "Skip Rebirth", Rebirth = true },
+		RainbowEgg = { Id = 0, Price = 45, Name = "Rainbow Egg", Egg = "Rainbow", Count = 1 },
+		RainbowEgg3 = { Id = 0, Price = 119, Name = "3x Rainbow Egg", Egg = "Rainbow", Count = 3 },
+		RainbowEgg8 = { Id = 0, Price = 299, Name = "8x Rainbow Egg", Egg = "Rainbow", Count = 8 },
 		OfflineTriple = { Id = 0, Price = 9, Name = "x3 Offline Strength" },
 		StarterPack = {
 			Id = 0,
 			Price = 49,
+			WasPrice = 199,
 			Name = "Starter Pack",
 			Strength = 25_000,
 			Wins = 1_000,
@@ -700,6 +733,14 @@ Config.Monetization = {
 			OneTime = true,
 		},
 	},
+}
+
+-- Codes for the shop's code box (case-insensitive). Each can be redeemed once per player.
+-- Rewards: Strength, Wins, Boosts ({ Kind, Minutes }).
+Config.Codes = {
+	RELEASE = { Strength = 5_000, Wins = 100 },
+	KUNGFU = { Boosts = { { Kind = "Strength", Minutes = 15 } } },
+	CHOP = { Wins = 250 },
 }
 
 --------------------------------------------------------------------------------

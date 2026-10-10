@@ -42,6 +42,7 @@ local DEFAULT_DATA = {
 	Boosts = { Strength = 0, Wins = 0, Luck = 0 }, -- expiry (Unix time)
 	Passes = {}, -- [passName] = true
 	Receipts = {}, -- recent processed developer-product purchase ids
+	RedeemedCodes = {}, -- [CODE] = true
 	StarterPackBought = false,
 	LastOnline = 0,
 	Stats = { Chops = 0, Runs = 0, WallsBroken = 0, EggsHatched = 0 },

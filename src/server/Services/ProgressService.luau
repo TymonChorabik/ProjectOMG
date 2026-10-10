@@ -99,10 +99,15 @@ local function equipTrail(player: Player, data, trailId: string?)
 	return Success(`Equipped {trail.Name}!`)
 end
 
-local function rebirth(player: Player, data)
+-- Performs a rebirth. `skip` (the Skip Rebirth product) ignores the level requirement.
+function ProgressService:Rebirth(player: Player, skip: boolean?): (boolean, string)
+	local data = DataService:GetData(player)
+	if not data then
+		return false, "Your data is still loading..."
+	end
 	local cost = Formulas.GetRebirthCost(data.Rebirths)
-	if data.Strength < cost then
-		return Fail(`Reach Level {Config.Rebirth.MaxLevel} ({NumberFormat.Abbreviate(cost)} Strength) to rebirth!`)
+	if data.Strength < cost and not skip then
+		return false, `Reach Level {Config.Rebirth.MaxLevel} ({NumberFormat.Abbreviate(cost)} Strength) to rebirth!`
 	end
 	local newRebirths = data.Rebirths + 1
 	DataService:Set(player, "Strength", 0)
@@ -116,7 +121,12 @@ local function rebirth(player: Player, data)
 			message ..= ` {zone.Name} unlocked!`
 		end
 	end
-	return Success(message)
+	return true, message
+end
+
+local function rebirth(player: Player)
+	local ok, message = ProgressService:Rebirth(player)
+	return if ok then Success(message) else Fail(message)
 end
 
 function ProgressService:Init()

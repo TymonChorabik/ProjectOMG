@@ -3,6 +3,7 @@
 	• Playtime gifts: claimable after N minutes in the current session (Config.PlaytimeRewards).
 	• Offline training: "Welcome back! You trained while you were offline" (Config.Offline).
 	• Timed 2x boosts (Strength / Wins / Luck) stored as expiry timestamps in the profile.
+	• Codes typed into the shop's code box (Config.Codes), once per player.
 ]]
 
 local Players = game:GetService("Players")
@@ -124,6 +125,36 @@ local function claimPlaytime(player: Player, data, arg: string?)
 	return Success(`🎁 {description}!`, { Index = index })
 end
 
+local function redeemCode(player: Player, data, arg: string?)
+	local code = string.upper((string.gsub(arg or "", "%s", "")))
+	local reward = Config.Codes[code]
+	if code == "" or not reward then
+		return Fail("That code doesn't exist (or it expired).")
+	end
+	if data.RedeemedCodes[code] then
+		return Fail("You already redeemed that code!")
+	end
+	data.RedeemedCodes[code] = true
+	DataService:MarkDirty(player, "RedeemedCodes")
+
+	local parts = {}
+	if reward.Strength then
+		DataService:Increment(player, "Strength", reward.Strength)
+		table.insert(parts, `+{NumberFormat.Abbreviate(reward.Strength)} Strength`)
+	end
+	if reward.Wins then
+		ProgressService:GrantWins(player, reward.Wins)
+		table.insert(parts, `+{NumberFormat.Abbreviate(reward.Wins)} Wins`)
+	end
+	if reward.Boosts then
+		for _, boost in reward.Boosts do
+			RewardsService:GrantBoost(player, boost.Kind, boost.Minutes * 60)
+			table.insert(parts, `{Config.Boosts[boost.Kind].Name} for {boost.Minutes} min`)
+		end
+	end
+	return Success(`🎉 Code redeemed: {table.concat(parts, ", ")}!`)
+end
+
 local function claimOffline(player: Player)
 	if RewardsService:ClaimOffline(player, 1) then
 		return Success()
@@ -153,6 +184,7 @@ function RewardsService:Init()
 	ActionService:Register("GetSession", sessionInfo)
 	ActionService:Register("ClaimPlaytime", claimPlaytime)
 	ActionService:Register("ClaimOffline", claimOffline)
+	ActionService:Register("RedeemCode", redeemCode)
 end
 
 function RewardsService:Start()

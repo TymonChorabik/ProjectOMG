@@ -2,17 +2,18 @@
 	WorldController.luau
 	Makes the hub interactive and keeps its signs in sync with your data:
 	• hand item pedestals – "Equip" prompt; sign shows LOCKED / UNLOCKED / EQUIPPED
-	• eggs – "Hatch" prompt (Wins) or Robux purchase for the Rainbow Egg
+	• eggs – walk up to one and the EggPanel (pet chances, Hatch 1 / 3 / 8) appears beside it
 	• "Best in game" showcase – buy prompt
 	• training floors – sign shows UNLOCKED / LOCKED (the pill above it shows the requirement)
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Formulas = require(Shared.Formulas)
-local NumberFormat = require(Shared.NumberFormat)
 
 local ClientData = require(script.Parent.Parent.ClientData)
 
@@ -22,7 +23,9 @@ local GREEN = Color3.fromRGB(120, 255, 120)
 local RED = Color3.fromRGB(255, 90, 90)
 local YELLOW = Color3.fromRGB(255, 220, 70)
 
-type Ctx = { Request: (string, string?) -> (), Purchase: (string) -> () }
+type Ctx = { Request: (string, string?) -> (), Purchase: (string) -> (), EggPanel: any }
+
+local EGG_RANGE = 15 -- studs from the egg where its panel shows up
 
 local itemSigns: { [string]: TextLabel } = {}
 local zoneSigns: { [string]: TextLabel } = {}
@@ -99,24 +102,40 @@ function WorldController.Start(ctx: Ctx)
 			end
 		end
 
-		-- Eggs.
-		local eggs = map:WaitForChild("Eggs")
-		for _, model in eggs:GetChildren() do
+		-- Eggs: show the egg panel beside the nearest egg in range.
+		local eggSpots: { { Id: string, Part: BasePart } } = {}
+		for _, model in map:WaitForChild("Eggs"):GetChildren() do
 			local egg = Formulas.GetEgg(model:GetAttribute("EggId"))
-			local pad = model:FindFirstChild("Pad")
-			if egg and pad then
-				local action = if egg.Cost
-					then `Hatch ({NumberFormat.Abbreviate(egg.Cost)} Wins)`
-					else `Hatch (R$ {Config.Monetization.Products[egg.Product].Price})`
-				prompt(pad, action, egg.Name, function()
-					if egg.Product then
-						ctx.Purchase("product:" .. egg.Product)
-					else
-						ctx.Request("HatchEgg", egg.Id)
-					end
-				end)
+			local part = model:FindFirstChild("Egg")
+			if egg and part and part:IsA("BasePart") then
+				table.insert(eggSpots, { Id = egg.Id, Part = part })
 			end
 		end
+		RunService.RenderStepped:Connect(function()
+			local character = Players.LocalPlayer.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			local camera = workspace.CurrentCamera
+			local nearest, nearestDistance = nil, EGG_RANGE
+			if root and root:IsA("BasePart") then
+				for _, spot in eggSpots do
+					local offset = spot.Part.Position - root.Position
+					local distance = Vector2.new(offset.X, offset.Z).Magnitude
+					if distance < nearestDistance then
+						nearest, nearestDistance = spot, distance
+					end
+				end
+			end
+			if nearest and camera then
+				local edge = nearest.Part.Position + camera.CFrame.RightVector * (nearest.Part.Size.X / 2 + 0.5)
+				local point, onScreen = camera:WorldToScreenPoint(edge)
+				if onScreen then
+					ctx.EggPanel:SetScreenPosition(point.X, point.Y, camera.ViewportSize)
+					ctx.EggPanel:SetEgg(nearest.Id)
+					return
+				end
+			end
+			ctx.EggPanel:SetEgg(nil)
+		end)
 
 		-- Best-in-game showcase.
 		local showcase = map:WaitForChild("Showcase")
