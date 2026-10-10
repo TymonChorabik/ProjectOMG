@@ -11,8 +11,8 @@
 
 	Used offline by tools/mapgen/build_map.py (baked into src/workspace/Map/*.model.json so it's
 	visible and editable in Studio) and at runtime by WorldService if Workspace.Map is missing.
-	Gameplay reads names/attributes back from the map: Zone_<Id>/Area,
-	Zone_<Id>/Stations/Station_<n> (StationId attribute, Pad, Stand and Target), Item_<Id>, Egg_<Id>,
+	Gameplay reads names/attributes back from the map: Zone_<Id>/TrainPad (+ the Target item),
+	Item_<Id>, Egg_<Id>,
 	Lane/LaunchPad, Lane/Walls/Wall_<n>, Leaderboards/<BoardId>.
 ]]
 
@@ -39,7 +39,7 @@ local CLIFF = { Color3.fromRGB(176, 120, 70), Color3.fromRGB(150, 98, 56) }
 local INK = Color3.fromRGB(25, 20, 30)
 local WHITE = Color3.new(1, 1, 1)
 
-local ZONE = { FirstX = -86, Spacing = 38, Width = 30, MinZ = -30, Length = 90 }
+local ZONE = { FirstX = -86, Spacing = 34, Width = 28, MinZ = -30, Length = 86 }
 local ITEMS = { FirstX = 76, Spacing = 36, FirstZ = -14, RowSpacing = 32, PerRow = 5 }
 local SPAWN_POSITION = Vector3.new(0, 0.6, -18)
 
@@ -374,13 +374,10 @@ end
 --------------------------------------------------------------------------------
 
 local function zoneStatus(zone): (string, Color3)
-	if zone.Pass then
-		local pass = Config.Monetization.GamePasses[zone.Pass]
-		return `R$ {pass and pass.Price or "?"}`, Color3.fromRGB(120, 255, 120)
-	elseif (zone.RequiredRebirths or 0) > 0 then
-		return `🔒 🌀 {zone.RequiredRebirths} Rebirths`, Color3.fromRGB(255, 90, 90)
+	if zone.Pass or (zone.RequiredRebirths or 0) > 0 then
+		return "LOCKED", Color3.fromRGB(255, 80, 80)
 	end
-	return "UNLOCKED", Color3.fromRGB(120, 255, 120)
+	return "UNLOCKED", Color3.fromRGB(110, 235, 70)
 end
 
 local CINDER = Color3.fromRGB(150, 150, 158)
@@ -474,160 +471,170 @@ local function breakable(target: Instance, def, top: Vector3, accent: Color3)
 	end
 end
 
--- A training pad (like the throwing pads at the Stone Skipping ponds) plus the stand with the
--- dojo's breakable. `side` is +1/-1: which side of the pit the station is on. The player stands
--- on the pad facing the pit; broken pieces fly into the pit.
-local function station(stations: Instance, zone, index: number, position: Vector3, side: number)
-	local model = folder(stations, "Station_" .. index, "Model")
-	model:SetAttribute("StationId", zone.Id .. "_" .. index)
-	model:SetAttribute("ZoneId", zone.Id)
-
-	-- Stand: two cinder blocks with the breakable across them.
-	for _, dz in { -1.35, 1.35 } do
-		box(model, "Block", Vector3.new(1.6, 1.6, 1.0), position + Vector3.new(0, 0.8, dz), CINDER, {
-			Material = Enum.Material.Concrete,
-			Studs = false,
-		})
-	end
-	local target = folder(model, "Target", "Model")
-	breakable(target, zone.Breakable, position + Vector3.new(0, 1.6, 0), zone.Accent)
-
-	-- Pad.
-	local padPosition = position + Vector3.new(side * 3.7, 0, 0)
-	local toTarget = Vector3.new(-side, 0, 0)
-	box(model, "Pad", Vector3.new(3.8, 0.3, 3.8), padPosition + Vector3.new(0, 0.15, 0), zone.Trim)
-	box(model, "PadInset", Vector3.new(3.0, 0.32, 3.0), padPosition + Vector3.new(0, 0.16, 0), zone.Accent, {
-		Material = Enum.Material.SmoothPlastic,
-		Studs = false,
-	})
-	-- Chevron pointing at the breakable.
-	local tip = padPosition + toTarget * 0.75 + Vector3.new(0, 0.33, 0)
-	for _, s in { -1, 1 } do
-		local armDirection = (-toTarget * math.cos(math.rad(45)) + Vector3.new(0, 0, s * math.sin(math.rad(45)))).Unit
-		local center = tip + armDirection * 0.55
-		box(model, "Arrow", Vector3.new(0.28, 0.06, 1.2), center, WHITE, {
-			CFrame = CFrame.lookAt(center, center + armDirection),
-			Material = Enum.Material.SmoothPlastic,
-			Studs = false,
-		})
-	end
-
-	box(model, "Stand", Vector3.new(2.5, 0.2, 2.5), padPosition + Vector3.new(0, 0.1, 0), WHITE, {
-		CFrame = CFrame.lookAt(padPosition + Vector3.new(0, 0.1, 0), position + Vector3.new(0, 0.1, 0)),
-		Transparency = 1,
-		CanCollide = false,
-		CanQuery = false,
-		CanTouch = false,
-		Studs = false,
-	})
-end
-
--- The "pond": a sunken pit down the middle of the dojo, already littered with broken pieces.
-local function pit(model: Instance, zone, index: number, cx: number, cz: number, length: number)
-	local width = 10
-	local glowing = zone.Id == "Lava" or zone.Id == "Cosmic"
-	box(
-		model,
-		"PitFloor",
-		Vector3.new(width, 0.2, length),
-		Vector3.new(cx, 0.82, cz),
-		if glowing then zone.Accent else shade(zone.Floor, 0.55),
-		{
-			Material = if glowing then Enum.Material.Neon else Enum.Material.SmoothPlastic,
-			Transparency = if glowing then 0.15 else 0,
-			Studs = false,
-		}
-	)
-	for _, s in { -1, 1 } do
-		box(
-			model,
-			"PitRim",
-			Vector3.new(0.6, 0.7, length + 0.6),
-			Vector3.new(cx + s * (width / 2), 1.15, cz),
-			zone.Trim
-		)
-		box(
-			model,
-			"PitRim",
-			Vector3.new(width + 0.6, 0.7, 0.6),
-			Vector3.new(cx, 1.15, cz + s * (length / 2)),
-			zone.Trim
-		)
-	end
-
-	local def = zone.Breakable
-	local material = (Enum.Material :: any)[def.Material or "SmoothPlastic"]
-	local rng = Random.new(index * 97)
-	for _ = 1, 34 do
-		local size = Vector3.new(rng:NextNumber(0.4, 1.2), rng:NextNumber(0.2, 0.5), rng:NextNumber(0.4, 1.4))
-		local position = Vector3.new(
-			cx + rng:NextNumber(-width / 2 + 1, width / 2 - 1),
-			0.95 + size.Y / 2,
-			cz + rng:NextNumber(-length / 2 + 1, length / 2 - 1)
-		)
-		box(model, "Rubble", size, position, shade(def.Color, rng:NextNumber(0.75, 1.05)), {
-			CFrame = CFrame.new(position) * CFrame.Angles(
-				math.rad(rng:NextNumber(-20, 20)),
-				math.rad(rng:NextNumber(0, 180)),
-				math.rad(rng:NextNumber(-20, 20))
-			),
-			Material = material,
-			Transparency = if material == Enum.Material.Ice then 0.2 else 0,
-			CanCollide = false,
-			Studs = false,
-		})
+-- Rotates every part in `parent` by `rotation` about `origin`.
+local function rotateAbout(parent: Instance, origin: Vector3, rotation: CFrame)
+	local transform = CFrame.new(origin) * rotation * CFrame.new(-origin)
+	for _, child in parent:GetChildren() do
+		if child:IsA("BasePart") then
+			child.CFrame = transform * child.CFrame
+		end
 	end
 end
 
+-- One training floor, like a Stone Skipping pond: a raised frame, a studded bank, a long pool
+-- and a studded pad at the near end (corner brackets + an arrow pointing at the pool). Standing
+-- on the pad trains you; your chop breaks the floor's item on the pillar in front of the pad.
 local function buildZone(zonesFolder: Instance, zone, index: number)
 	local model = folder(zonesFolder, "Zone_" .. zone.Id, "Model")
 	model:SetAttribute("ZoneId", zone.Id)
 
 	local cx = ZONE.FirstX - (index - 1) * ZONE.Spacing
 	local width, length = ZONE.Width, ZONE.Length
-	local cz = ZONE.MinZ + length / 2
+	local nearZ = ZONE.MinZ
+	local cz = nearZ + length / 2
 
-	box(model, "Floor", Vector3.new(width, 0.8, length), Vector3.new(cx, 0.4, cz), zone.Floor)
-	-- Raised border.
-	for _, side in { -1, 1 } do
-		box(model, "Border", Vector3.new(2, 1.6, length), Vector3.new(cx + side * (width / 2 - 1), 0.8, cz), zone.Trim)
-		box(model, "Border", Vector3.new(width, 1.6, 2), Vector3.new(cx, 0.8, cz + side * (length / 2 - 1)), zone.Trim)
+	-- Frame, bank and pool.
+	-- Low enough to walk straight onto (frame top 0.8, bank top 1.0).
+	box(model, "Frame", Vector3.new(width, 0.8, length), Vector3.new(cx, 0.4, cz), zone.Trim)
+	local glowing = zone.Id == "Lava" or zone.Id == "Cosmic"
+	local poolStart = nearZ + 13
+	local poolEnd = nearZ + length - 3
+	local poolLength = poolEnd - poolStart
+	local poolHalf = width / 2 - 3
+	local poolCenter = Vector3.new(cx, 0, (poolStart + poolEnd) / 2)
+
+	-- The bank (top 1.0) is four strips around the pool, so the pool sits lower.
+	local bankHalf = width / 2 - 1.2
+	local bankNear, bankFar = nearZ + 1.2, nearZ + length - 1.2
+	local function bank(x0: number, x1: number, z0: number, z1: number)
+		box(
+			model,
+			"Bank",
+			Vector3.new(x1 - x0, 1.0, z1 - z0),
+			Vector3.new((x0 + x1) / 2, 0.5, (z0 + z1) / 2),
+			zone.Floor
+		)
 	end
-	-- The "pond": a pit down the middle, like the training ponds in Stone Skipping.
-	pit(model, zone, index, cx, cz + 1, length - 14)
-	-- Training stations along both sides of the pit: pad + stand with the dojo's breakable.
-	local stations = folder(model, "Stations")
-	local stationIndex = 0
-	for _, side in { -1, 1 } do
-		for row = 0, 3 do
-			stationIndex += 1
-			station(stations, zone, stationIndex, Vector3.new(cx + side * 7.2, 0.8, ZONE.MinZ + 16 + row * 20), side)
+	bank(cx - bankHalf, cx + bankHalf, bankNear, poolStart)
+	bank(cx - bankHalf, cx + bankHalf, poolEnd, bankFar)
+	bank(cx - bankHalf, cx - poolHalf, poolStart, poolEnd)
+	bank(cx + poolHalf, cx + bankHalf, poolStart, poolEnd)
+
+	box(
+		model,
+		"PoolBed",
+		Vector3.new(poolHalf * 2, 0.1, poolLength),
+		poolCenter + Vector3.new(0, 0.85, 0),
+		shade(zone.Accent, 0.5),
+		{
+			Studs = false,
+		}
+	)
+	box(model, "Water", Vector3.new(poolHalf * 2, 0.1, poolLength), poolCenter + Vector3.new(0, 0.93, 0), zone.Accent, {
+		Material = if glowing then Enum.Material.Neon else Enum.Material.SmoothPlastic,
+		Transparency = if glowing then 0.1 else 0.3,
+		CanCollide = false,
+		Studs = false,
+	})
+
+	-- Reeds and pebbles on the bank.
+	local rng = Random.new(index * 31)
+	for _ = 1, 8 do
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		local x = cx + side * (width / 2 - 2.1)
+		local z = rng:NextNumber(poolStart, poolEnd)
+		if rng:NextNumber() < 0.5 then
+			for blade = -1, 1 do
+				box(
+					model,
+					"Reed",
+					Vector3.new(0.25, 1.4 + blade * 0.3, 0.25),
+					Vector3.new(x + blade * 0.3, 1.7, z),
+					shade(zone.Floor, 0.7),
+					{
+						Studs = false,
+					}
+				)
+			end
+		else
+			box(
+				model,
+				"Pebble",
+				Vector3.new(1, 0.6, 0.8),
+				Vector3.new(x, 1.3, z),
+				shade(zone.Trim, 1.3),
+				{ Studs = false }
+			)
 		end
 	end
-	-- Entrance arch + sign.
+
+	-- The pad.
+	local padCenter = Vector3.new(cx, 1.15, nearZ + 6.5)
+	local forward = Vector3.new(0, 0, 1)
+	local pad = box(model, "TrainPad", Vector3.new(9, 0.3, 9), padCenter, shade(zone.Trim, 1.2), {
+		CFrame = CFrame.lookAt(padCenter, padCenter + forward),
+	})
+	pad:SetAttribute("ZoneId", zone.Id)
+	local markY = padCenter.Y + 0.18
+	local bracket = Color3.new(1, 1, 1)
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			local corner = Vector3.new(cx + sx * 3.6, markY, padCenter.Z + sz * 3.6)
+			box(model, "Bracket", Vector3.new(1.8, 0.06, 0.3), corner - Vector3.new(sx * 0.75, 0, 0), bracket, {
+				Studs = false,
+				CanCollide = false,
+			})
+			box(model, "Bracket", Vector3.new(0.3, 0.06, 1.8), corner - Vector3.new(0, 0, sz * 0.75), bracket, {
+				Studs = false,
+				CanCollide = false,
+			})
+		end
+	end
+	local tip = Vector3.new(cx, markY, padCenter.Z + 1.4)
+	for _, sx in { -1, 1 } do
+		local armDirection = (Vector3.new(sx * math.sin(math.rad(45)), 0, -math.cos(math.rad(45)))).Unit
+		local center = tip + armDirection * 0.75
+		box(model, "Arrow", Vector3.new(0.3, 0.06, 1.6), center, bracket, {
+			CFrame = CFrame.lookAt(center, center + armDirection),
+			Studs = false,
+			CanCollide = false,
+		})
+	end
+
+	-- The item you chop, on a pillar standing in the pool just past the pad.
+	local itemTop = Vector3.new(cx, 2.9, poolStart + 1.6)
+	box(model, "Pillar", Vector3.new(1.8, 2.4, 1.8), itemTop - Vector3.new(0, 1.2, 0), CINDER, {
+		Material = Enum.Material.Concrete,
+		Studs = false,
+	})
+	local target = folder(model, "Target", "Model")
+	breakable(target, zone.Breakable, itemTop, zone.Accent)
+	-- Items are modelled lying along Z; turn them across the player's view.
+	rotateAbout(target, itemTop, CFrame.Angles(0, math.rad(90), 0))
+
+	-- Sign over the near end: requirement pill, LOCKED / UNLOCKED, multiplier.
 	local status, statusColor = zoneStatus(zone)
-	arch(model, ZONE.MinZ - 1, 12, 12, zone.Trim, shade(zone.Floor, 0.9), {
-		{ Name = "Title", Text = string.upper(zone.Name), Color = WHITE, Height = 0.9 },
-	}, cx)
-	billboard(model, Vector3.new(cx, 22, ZONE.MinZ - 1), 14, 5, {
+	local requirement = if zone.Pass
+		then `R$ {Config.Monetization.GamePasses[zone.Pass].Price}`
+		else `🔄 {zone.RequiredRebirths or 0}`
+	local sign = billboard(model, Vector3.new(cx, 13, nearZ + 9), 12, 6, {
+		{ Name = "Requirement", Text = requirement, Color = WHITE, Height = 0.3 },
+		{ Name = "Status", Text = status, Color = statusColor, Height = 0.22 },
 		{
 			Name = "Multiplier",
 			Text = `{NumberFormat.Multiplier(zone.Multiplier)} STRENGTH`,
-			Color = Color3.fromRGB(255, 220, 70),
-			Height = 0.5,
-			Font = Enum.Font.LuckiestGuy,
+			Color = WHITE,
+			Height = 0.36,
+			Font = Enum.Font.GothamBlack,
 		},
-		{ Name = "Status", Text = status, Color = statusColor, Height = 0.4 },
 	})
-
-	-- Invisible volume used to detect who is training here.
-	box(model, "Area", Vector3.new(width, 24, length), Vector3.new(cx, 12, cz), WHITE, {
-		Transparency = 1,
-		CanCollide = false,
-		CanQuery = false,
-		CanTouch = false,
-		Studs = false,
-	})
+	local pill = (sign:FindFirstChild("Info") :: Instance):FindFirstChild("Requirement") :: TextLabel
+	pill.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+	pill.BackgroundTransparency = 0.1
+	pill.Size = UDim2.fromScale(0.42, 0.3)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = pill
 end
 
 --------------------------------------------------------------------------------

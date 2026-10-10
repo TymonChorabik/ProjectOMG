@@ -1,10 +1,12 @@
 --[[
 	TrainingController.luau
-	Dojo training, the only way to gain Strength. "Hold E" on a training pad: the character
-	steps onto it, faces the stand and karate-chops the dojo's item (boards, bamboo, ice...)
-	over and over until you move or jump. Each chop is in step with the server's Strength gain:
-	the item shatters into the pit, "+X ⚡" pops up, and a fresh item appears.
-	Everyone who is training is animated on every client, and their items break too.
+	Training floors, the only way to gain Strength (like the ponds in +1 Stone Skipping).
+	• Step onto a floor's pad and you train automatically: your character faces the pool and
+	  karate-chops, sending a slash at the floor's item (boards, bamboo, ice...), which shatters
+	  into the water and drops back in. Each chop is in step with the server's Strength gain.
+	• Everyone else standing on YOUR pad is hidden for you (body, name and pets), so it looks
+	  like you're training alone. Players on other pads stay visible and chop too.
+	• Stepping on a locked floor tells you what unlocks it.
 ]]
 
 local Players = game:GetService("Players")
@@ -17,42 +19,44 @@ local Config = require(Shared.Config)
 local Formulas = require(Shared.Formulas)
 local NumberFormat = require(Shared.NumberFormat)
 local Remotes = require(Shared.Remotes)
+local TrainingPads = require(Shared.TrainingPads)
 
 local ClientData = require(script.Parent.Parent.ClientData)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local TrainingAnimator = require(script.Parent.Parent.Effects.TrainingAnimator)
 local Popups = require(script.Parent.Parent.UI.Popups)
+local PetController = require(script.Parent.PetController)
 
 local TrainingController = {}
 
-local RESPAWN_DELAY = 0.28 -- a new item appears this long after the old one shatters
+local CHECK_INTERVAL = 0.1
+local RESPAWN_DELAY = 0.28 -- a new item drops in this long after the old one shatters
+local SLASH_TIME = 0.12
 local SHARD_LIFETIME = 1.3
-local MAX_SHARDS = 90 -- across all stations, so busy servers stay smooth
+local MAX_SHARDS = 90 -- across all floors, so busy servers stay smooth
 
 type TargetPart = { Part: BasePart, Transparency: number, CFrame: CFrame }
-type Station = {
-	Id: string,
+type Floor = {
+	Pad: TrainingPads.Pad,
 	Zone: any,
-	Model: Model,
-	Stand: BasePart,
-	Pad: BasePart,
-	Prompt: ProximityPrompt,
 	Target: { TargetPart },
-	Direction: Vector3, -- pad → item, flattened (pieces fly this way, into the pit)
+	TargetCenter: Vector3,
+	Forward: Vector3, -- from the pad toward the pool
 	Broken: boolean,
 }
 
 local localPlayer = Players.LocalPlayer
 local rng = Random.new()
-local stations: { [string]: Station } = {}
-local animations: { [Player]: { Handle: TrainingAnimator.Handle, Character: Model, StationId: string } } = {}
+local pads: { TrainingPads.Pad } = {}
+local floors: { [string]: Floor } = {} -- by zone id
+local animations: { [Player]: { Handle: TrainingAnimator.Handle, Character: Model, ZoneId: string } } = {}
+local hiddenPlayers: { [Player]: boolean } = {}
+local disabledEffects: { [Instance]: boolean } = {}
 local debrisFolder: Instance? = nil
 local liveShards = 0
 
-local currentStation: Station? = nil
-local moveConnection: RBXScriptConnection? = nil
-local requesting = false
-local hinted = false
+local currentPad: TrainingPads.Pad? = nil
+local facedPool = false
 
 --------------------------------------------------------------------------------
 -- Breaking the item
@@ -79,9 +83,9 @@ local function spawnShard(source: BasePart, transparency: number, direction: Vec
 	local size = source.Size
 	local shard = Instance.new("Part")
 	shard.Size = Vector3.new(
-		math.max(0.2, size.X * rng:NextNumber(0.25, 0.55)),
+		math.max(0.2, size.X * rng:NextNumber(0.2, 0.45)),
 		math.max(0.2, size.Y * rng:NextNumber(0.5, 0.9)),
-		math.max(0.2, size.Z * rng:NextNumber(0.2, 0.45))
+		math.max(0.2, size.Z * rng:NextNumber(0.25, 0.55))
 	)
 	shard.CFrame = source.CFrame
 		* CFrame.new(
@@ -104,9 +108,9 @@ local function spawnShard(source: BasePart, transparency: number, direction: Vec
 	shard.CollisionGroup = "Debris"
 	shard.Parent = getDebrisFolder()
 	local sideways = Vector3.new(-direction.Z, 0, direction.X)
-	shard.AssemblyLinearVelocity = direction * rng:NextNumber(9, 17)
-		+ sideways * rng:NextNumber(-5, 5)
-		+ Vector3.new(0, rng:NextNumber(9, 16), 0)
+	shard.AssemblyLinearVelocity = direction * rng:NextNumber(8, 16)
+		+ sideways * rng:NextNumber(-7, 7)
+		+ Vector3.new(0, rng:NextNumber(10, 18), 0)
 	shard.AssemblyAngularVelocity = Vector3.new(rng:NextNumber(-1, 1), rng:NextNumber(-1, 1), rng:NextNumber(-1, 1))
 		* 14
 	liveShards += 1
@@ -121,31 +125,62 @@ local function spawnShard(source: BasePart, transparency: number, direction: Vec
 	end)
 end
 
--- Shatters the station's item into the pit and pops a fresh one back after a moment.
-local function breakTarget(station: Station, piecesPerPart: number)
-	if station.Broken then
+-- Shatters the floor's item into the pool and drops a fresh one back in after a moment.
+local function breakTarget(floor: Floor, piecesPerPart: number)
+	if floor.Broken or #floor.Target == 0 then
 		return
 	end
-	station.Broken = true
-	for _, entry in station.Target do
+	floor.Broken = true
+	for _, entry in floor.Target do
 		for _ = 1, piecesPerPart do
-			spawnShard(entry.Part, entry.Transparency, station.Direction)
+			spawnShard(entry.Part, entry.Transparency, floor.Forward)
 		end
 		entry.Part.Transparency = 1
 	end
 
 	task.delay(RESPAWN_DELAY, function()
-		for _, entry in station.Target do
-			-- Drop the new item in from just above the stand.
+		for _, entry in floor.Target do
 			entry.Part.Transparency = entry.Transparency
-			entry.Part.CFrame = entry.CFrame + Vector3.new(0, 0.7, 0)
+			entry.Part.CFrame = entry.CFrame + Vector3.new(0, 0.8, 0)
 			TweenService:Create(
 				entry.Part,
 				TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
 				{ CFrame = entry.CFrame }
 			):Play()
 		end
-		station.Broken = false
+		floor.Broken = false
+	end)
+end
+
+-- A glowing crescent that flies from the chopping hand to the item, then breaks it.
+local function slash(character: Model, floor: Floor, piecesPerPart: number)
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		breakTarget(floor, piecesPerPart)
+		return
+	end
+	local from = root.Position + root.CFrame.LookVector * 1.5 - Vector3.new(0, 0.5, 0)
+	local to = floor.TargetCenter
+	local wave = Instance.new("Part")
+	wave.Anchored = true
+	wave.CanCollide = false
+	wave.CanQuery = false
+	wave.CanTouch = false
+	wave.CastShadow = false
+	wave.Material = Enum.Material.Neon
+	wave.Color = Color3.fromRGB(255, 250, 220)
+	wave.Transparency = 0.15
+	wave.Size = Vector3.new(2.8, 0.15, 0.6)
+	local tilt = CFrame.Angles(0, 0, math.rad(rng:NextNumber(-30, 30)))
+	wave.CFrame = CFrame.lookAt(from, to) * tilt
+	wave.Parent = getDebrisFolder()
+	TweenService:Create(wave, TweenInfo.new(SLASH_TIME, Enum.EasingStyle.Linear), {
+		CFrame = CFrame.lookAt(to, to + (to - from)) * tilt,
+		Size = Vector3.new(3.6, 0.15, 0.6),
+	}):Play()
+	task.delay(SLASH_TIME, function()
+		wave:Destroy()
+		breakTarget(floor, piecesPerPart)
 	end)
 end
 
@@ -171,49 +206,6 @@ local function showGain(gain: number)
 	Popups.ScreenText(popupPosition(), "⚡ +" .. NumberFormat.Abbreviate(gain), Color3.fromRGB(255, 220, 70), 26)
 end
 
---------------------------------------------------------------------------------
--- Animating everyone who trains
---------------------------------------------------------------------------------
-
-local function refreshAnimation(player: Player)
-	local stationId = player:GetAttribute("Training")
-	local station = if type(stationId) == "string" then stations[stationId] else nil
-	local character = player.Character
-	local current = animations[player]
-
-	if current and (not station or current.Character ~= character or current.StationId ~= stationId) then
-		current.Handle.Stop()
-		animations[player] = nil
-		current = nil
-	end
-	if current or not station or not character then
-		return
-	end
-
-	local isLocal = player == localPlayer
-	local handle = TrainingAnimator.Start(character, {
-		-- The local player's chops follow the server's gains (ChopResult); others loop.
-		Period = if isLocal then nil else Config.Training.IdleInterval,
-		OnHit = function()
-			breakTarget(station, if isLocal then 3 else 2)
-			if isLocal then
-				Sfx.Play("Smash", { Volume = 0.25, PitchVariance = 0.15 })
-			end
-		end,
-	})
-	animations[player] = { Handle = handle, Character = character, StationId = station.Id }
-end
-
-local function watchPlayer(player: Player)
-	player:GetAttributeChangedSignal("Training"):Connect(function()
-		refreshAnimation(player)
-	end)
-	player.CharacterAdded:Connect(function()
-		refreshAnimation(player)
-	end)
-	refreshAnimation(player)
-end
-
 -- Server granted one training chop: chop now and show the gain when the hand lands.
 local function onChopResult(gain: number)
 	local animation = animations[localPlayer]
@@ -227,164 +219,179 @@ local function onChopResult(gain: number)
 end
 
 --------------------------------------------------------------------------------
--- Local player
+-- Hiding the players who share your pad
 --------------------------------------------------------------------------------
 
-local function refreshPrompts()
-	local data = ClientData.Data
-	for _, station in stations do
-		local occupant = station.Model:GetAttribute("Occupant")
-		local takenByOther = occupant ~= nil and occupant ~= localPlayer.UserId
-		station.Prompt.Enabled = not takenByOther and currentStation ~= station
-		local unlocked = data == nil or Formulas.IsZoneUnlocked(data, station.Zone.Id)
-		local name = station.Zone.Breakable.Name
-		station.Prompt.ObjectText = if unlocked then name else "🔒 " .. name
-	end
-end
-
-local function stopTraining(tellServer: boolean)
-	local station = currentStation
-	if not station then
-		return
-	end
-	currentStation = nil
-	if moveConnection then
-		moveConnection:Disconnect()
-		moveConnection = nil
-	end
-	local character = localPlayer.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		humanoid.AutoRotate = true
-	end
-	refreshPrompts()
-	if tellServer then
-		task.spawn(function()
-			pcall(function()
-				Remotes.Action:InvokeServer("StopTraining")
-			end)
-		end)
-	end
-end
-
--- Puts the character on the pad, facing the item, and watches for movement to stop.
-local function beginTraining(station: Station)
-	local character = localPlayer.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	if not character or not humanoid or not root or not root:IsA("BasePart") then
-		return
-	end
-
-	local stand = station.Stand
-	local floorY = stand.Position.Y - stand.Size.Y / 2
-	local height = if humanoid.RigType == Enum.HumanoidRigType.R6 then 3 else humanoid.HipHeight + root.Size.Y / 2
-	local target = CFrame.new(stand.Position.X, floorY + height, stand.Position.Z) * stand.CFrame.Rotation
-	character:PivotTo(target)
-	root.AssemblyLinearVelocity = Vector3.zero
-	humanoid.AutoRotate = false
-
-	currentStation = station
-	refreshPrompts()
-	if not hinted then
-		hinted = true
-		Popups.Toast(`🥋 Breaking {station.Zone.Breakable.Name}! Move or jump to stop.`, "Info")
-	end
-
-	moveConnection = RunService.Heartbeat:Connect(function()
-		if humanoid.Health <= 0 or humanoid.MoveDirection.Magnitude > 0.1 or humanoid.Jump then
-			stopTraining(true)
+local function applyHidden(player: Player, isHidden: boolean)
+	local character = player.Character
+	if character then
+		for _, descendant in character:GetDescendants() do
+			if descendant:IsA("BasePart") or descendant:IsA("Decal") then
+				descendant.LocalTransparencyModifier = if isHidden then 1 else 0
+			elseif
+				descendant:IsA("Trail")
+				or descendant:IsA("ParticleEmitter")
+				or descendant:IsA("Beam")
+				or descendant:IsA("BillboardGui")
+			then
+				if isHidden and descendant.Enabled then
+					descendant.Enabled = false
+					disabledEffects[descendant] = true
+				elseif not isHidden and disabledEffects[descendant] then
+					descendant.Enabled = true
+					disabledEffects[descendant] = nil
+				end
+			end
 		end
-	end)
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.DisplayDistanceType = if isHidden
+				then Enum.HumanoidDisplayDistanceType.None
+				else Enum.HumanoidDisplayDistanceType.Viewer
+		end
+	end
+	PetController.SetHidden(player, isHidden)
 end
 
-local function requestTraining(station: Station)
-	if requesting or currentStation == station then
-		return
-	end
-	requesting = true
-	local ok, result = pcall(function()
-		return Remotes.Action:InvokeServer("StartTraining", station.Id)
-	end)
-	requesting = false
+local function rootOf(player: Player): BasePart?
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	return if root and root:IsA("BasePart") then root else nil
+end
 
-	if not ok or type(result) ~= "table" then
-		Popups.Toast("Connection hiccup — try again!", "Error")
+local function updateHidden()
+	for _, player in Players:GetPlayers() do
+		if player ~= localPlayer then
+			local root = rootOf(player)
+			local shouldHide = currentPad ~= nil
+				and root ~= nil
+				and TrainingPads.Contains(currentPad.Part, root.Position)
+			if shouldHide then
+				-- Re-applied every check so accessories that load late are hidden too.
+				hiddenPlayers[player] = true
+				applyHidden(player, true)
+			elseif hiddenPlayers[player] then
+				hiddenPlayers[player] = nil
+				applyHidden(player, false)
+			end
+		end
+	end
+end
+
+--------------------------------------------------------------------------------
+-- Chop animations (you, and everyone visible who is training)
+--------------------------------------------------------------------------------
+
+local function updateAnimations()
+	for _, player in Players:GetPlayers() do
+		local zoneId = player:GetAttribute("Training")
+		local floor = if type(zoneId) == "string" then floors[zoneId] else nil
+		local character = player.Character
+		local isLocal = player == localPlayer
+		local wanted = floor ~= nil and character ~= nil and (isLocal or not hiddenPlayers[player])
+		local current = animations[player]
+
+		if current and (not wanted or current.Character ~= character or current.ZoneId ~= zoneId) then
+			current.Handle.Stop()
+			animations[player] = nil
+			current = nil
+		end
+		if wanted and not current and floor and character then
+			local handle = TrainingAnimator.Start(character, {
+				-- Your chops follow the server's gains (ChopResult); other players loop.
+				Period = if isLocal then nil else Config.Training.IdleInterval,
+				OnHit = function()
+					slash(character, floor, if isLocal then 3 else 2)
+					if isLocal then
+						Sfx.Play("Smash", { Volume = 0.25, PitchVariance = 0.15 })
+					end
+				end,
+			})
+			animations[player] = { Handle = handle, Character = character, ZoneId = floor.Pad.ZoneId }
+		end
+	end
+end
+
+--------------------------------------------------------------------------------
+-- The local player's pad
+--------------------------------------------------------------------------------
+
+local function onPadChanged(newPad: TrainingPads.Pad?)
+	facedPool = false
+	if newPad == nil then
 		return
 	end
-	if not result.ok then
+	local pad = newPad :: TrainingPads.Pad
+	local data = ClientData.Data
+	local zone = Formulas.GetZone(pad.ZoneId)
+	if data and zone and not Formulas.IsZoneUnlocked(data, zone.Id) then
 		Sfx.Play("Denied", { Volume = 0.4 })
-		Popups.Toast(result.message or "You can't train here.", "Error")
-		return
+		if zone.Pass then
+			Popups.Toast(`🔒 Get the {zone.Name} pass to train here!`, "Error")
+		else
+			Popups.Toast(`🔒 Rebirth {zone.RequiredRebirths} times to train here!`, "Error")
+		end
 	end
-	stopTraining(false)
-	beginTraining(station)
+end
+
+local function updateLocal()
+	local character = localPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = rootOf(localPlayer)
+	local pad: TrainingPads.Pad? = nil
+	if humanoid and humanoid.Health > 0 and root and not localPlayer:GetAttribute("Running") then
+		pad = TrainingPads.At(pads, root.Position)
+	end
+	if pad ~= currentPad then
+		currentPad = pad
+		onPadChanged(pad)
+	end
+
+	-- Standing still on a pad: turn to face the pool.
+	if pad and humanoid and root then
+		if humanoid.MoveDirection.Magnitude > 0.05 then
+			facedPool = false
+		elseif not facedPool then
+			facedPool = true
+			local forward = floors[pad.ZoneId] and floors[pad.ZoneId].Forward or pad.Part.CFrame.LookVector
+			root.CFrame = CFrame.lookAt(root.Position, root.Position + forward)
+		end
+	end
 end
 
 --------------------------------------------------------------------------------
 -- Setup
 --------------------------------------------------------------------------------
 
-local function setupStation(model: Instance, zone)
-	local stationId = model:GetAttribute("StationId")
-	local stand = model:FindFirstChild("Stand")
-	local pad = model:FindFirstChild("Pad")
-	local targetModel = model:FindFirstChild("Target")
-	if
-		not model:IsA("Model")
-		or type(stationId) ~= "string"
-		or not (stand and stand:IsA("BasePart"))
-		or not (pad and pad:IsA("BasePart"))
-		or not targetModel
-	then
+local function setupFloor(pad: TrainingPads.Pad)
+	local zone = Formulas.GetZone(pad.ZoneId)
+	if not zone then
 		return
 	end
-
 	local target: { TargetPart } = {}
 	local center = Vector3.zero
-	for _, child in targetModel:GetChildren() do
-		if child:IsA("BasePart") then
-			table.insert(target, { Part = child, Transparency = child.Transparency, CFrame = child.CFrame })
-			center += child.Position
+	if pad.Target then
+		for _, child in pad.Target:GetChildren() do
+			if child:IsA("BasePart") then
+				table.insert(target, { Part = child, Transparency = child.Transparency, CFrame = child.CFrame })
+				center += child.Position
+			end
 		end
 	end
-	if #target == 0 then
-		return
-	end
-	center /= #target
-
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "TrainPrompt"
-	prompt.ActionText = "Train"
-	prompt.ObjectText = zone.Breakable.Name
-	prompt.KeyboardKeyCode = Enum.KeyCode.E
-	prompt.HoldDuration = 0.5
-	prompt.MaxActivationDistance = 9
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = pad
-
-	local toTarget = Vector3.new(center.X - pad.Position.X, 0, center.Z - pad.Position.Z)
-	local station: Station = {
-		Id = stationId,
-		Zone = zone,
-		Model = model,
-		Stand = stand,
+	local look = pad.Part.CFrame.LookVector
+	local forward = Vector3.new(look.X, 0, look.Z)
+	floors[pad.ZoneId] = {
 		Pad = pad,
-		Prompt = prompt,
+		Zone = zone,
 		Target = target,
-		Direction = if toTarget.Magnitude > 0.01 then toTarget.Unit else Vector3.xAxis,
+		TargetCenter = if #target > 0 then center / #target else pad.Part.Position + forward * 8,
+		Forward = if forward.Magnitude > 0.01 then forward.Unit else Vector3.zAxis,
 		Broken = false,
 	}
-	stations[stationId] = station
-
-	prompt.Triggered:Connect(function()
-		task.spawn(requestTraining, station)
-	end)
-	model:GetAttributeChangedSignal("Occupant"):Connect(refreshPrompts)
 end
 
 function TrainingController.IsTraining(): boolean
-	return currentStation ~= nil
+	return localPlayer:GetAttribute("Training") ~= nil
 end
 
 function TrainingController.Start()
@@ -393,44 +400,34 @@ function TrainingController.Start()
 	task.spawn(function()
 		local map = workspace:WaitForChild("Map")
 		local zones = map:WaitForChild("TrainingZones")
-		for _, zoneModel in zones:GetChildren() do
-			local zone = Formulas.GetZone(zoneModel:GetAttribute("ZoneId"))
-			local folder = zoneModel:FindFirstChild("Stations")
-			if zone and folder then
-				for _, model in folder:GetChildren() do
-					setupStation(model, zone)
-				end
-			end
+		for _, zone in Config.TrainingZones do
+			zones:WaitForChild("Zone_" .. zone.Id, 10)
 		end
-		refreshPrompts()
+		pads = TrainingPads.Collect(map)
+		for _, pad in pads do
+			setupFloor(pad)
+		end
 
-		Players.PlayerAdded:Connect(watchPlayer)
-		for _, player in Players:GetPlayers() do
-			watchPlayer(player)
-		end
-		Players.PlayerRemoving:Connect(function(player)
-			local current = animations[player]
-			if current then
-				current.Handle.Stop()
-				animations[player] = nil
+		local elapsed = 0
+		RunService.Heartbeat:Connect(function(dt)
+			elapsed += dt
+			if elapsed < CHECK_INTERVAL then
+				return
 			end
+			elapsed = 0
+			updateLocal()
+			updateHidden()
+			updateAnimations()
 		end)
 	end)
 
-	-- The server ended our session (walked away, died, started a run...).
-	localPlayer:GetAttributeChangedSignal("Training"):Connect(function()
-		if localPlayer:GetAttribute("Training") == nil then
-			stopTraining(false)
+	Players.PlayerRemoving:Connect(function(player)
+		local current = animations[player]
+		if current then
+			current.Handle.Stop()
+			animations[player] = nil
 		end
-	end)
-	localPlayer.CharacterRemoving:Connect(function()
-		stopTraining(false)
-	end)
-
-	ClientData.Changed:Connect(function(key)
-		if key == "Rebirths" or key == "Passes" then
-			refreshPrompts()
-		end
+		hiddenPlayers[player] = nil
 	end)
 end
 

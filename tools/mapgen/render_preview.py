@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Render quick isometric previews of the baked map (src/workspace/Map/*.model.json) so you
-can eyeball the layout without opening Studio. Writes docs/map/Hub.png, Lane.png and Dojos.png.
+can eyeball the layout without opening Studio. Writes docs/map/Hub.png, Lane.png and Training.png.
 
     python3 tools/mapgen/render_preview.py      (needs Pillow + numpy)
 
@@ -22,7 +22,7 @@ MAP_DIR = os.path.join(ROOT, "src", "workspace", "Map")
 VIEWS = {
     "Hub": (-360, 270, -190, 130),
     "Lane": (-150, 150, 40, 1000),
-    "Dojos": (-222, -68, -42, 64),
+    "Training": (-312, -66, -44, 60),
 }
 OUT_DIR = os.path.join(ROOT, "docs", "map")
 
@@ -154,7 +154,7 @@ def render(name, parts):
             fill = np.clip(color * shade, 0, 255)
             tiles = subdivide(world) if len(world) == 4 else [world]
             # Flat tops lying on the floor (floor, mats, pads) are drawn first, lowest first.
-            on_ground = world_normal[1] > 0.99 and world[:, 1].max() <= ground + 0.7
+            on_ground = world_normal[1] > 0.99 and world[:, 1].max() <= ground + 1.6
             layer = world[:, 1].mean() if on_ground else None
             for tile in tiles:
                 polygons.append(("poly", project(tile), layer, fill, neon))

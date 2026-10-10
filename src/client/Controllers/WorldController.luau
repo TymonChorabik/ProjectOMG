@@ -4,7 +4,7 @@
 	• hand item pedestals – "Equip" prompt; sign shows LOCKED / UNLOCKED / EQUIPPED
 	• eggs – "Hatch" prompt (Wins) or Robux purchase for the Rainbow Egg
 	• "Best in game" showcase – buy prompt
-	• training zones – sign shows UNLOCKED / rebirths needed / Robux price / OWNED
+	• training floors – sign shows UNLOCKED / LOCKED (the pill above it shows the requirement)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -62,19 +62,9 @@ local function refreshSigns()
 		end
 	end
 	for zoneId, label in zoneSigns do
-		local zone = Formulas.GetZone(zoneId)
-		if zone then
-			if Formulas.IsZoneUnlocked(data, zoneId) then
-				label.Text = if zone.Pass then "OWNED" else "UNLOCKED"
-				label.TextColor3 = GREEN
-			elseif zone.Pass then
-				label.Text = `R$ {Config.Monetization.GamePasses[zone.Pass].Price}`
-				label.TextColor3 = GREEN
-			else
-				label.Text = `🔒 🌀 {zone.RequiredRebirths} Rebirths`
-				label.TextColor3 = RED
-			end
-		end
+		local unlocked = Formulas.IsZoneUnlocked(data, zoneId)
+		label.Text = if unlocked then "UNLOCKED" else "LOCKED"
+		label.TextColor3 = if unlocked then GREEN else RED
 	end
 end
 
@@ -136,7 +126,7 @@ function WorldController.Start(ctx: Ctx)
 			ctx.Purchase("pass:LionKing")
 		end)
 
-		-- Training zone signs.
+		-- Training floor signs.
 		local zones = map:WaitForChild("TrainingZones")
 		for _, model in zones:GetChildren() do
 			local zoneId = model:GetAttribute("ZoneId")

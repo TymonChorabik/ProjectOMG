@@ -4,8 +4,7 @@
 
 	The map lives in Workspace.Map (baked from src/workspace/Map/*.model.json, so you can see and
 	edit it in Studio). If it's missing, MapBuilder generates it from Config at startup.
-	Gameplay only reads: TrainingZones/Zone_<Id>/Area, TrainingZones/Zone_<Id>/Stations,
-	Lane/LaunchPad and Lane/Walls.
+	Gameplay only reads: TrainingZones/Zone_<Id>/TrainPad, Lane/LaunchPad and Lane/Walls.
 ]]
 
 local Lighting = game:GetService("Lighting")
@@ -13,17 +12,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
+local TrainingPads = require(Shared.TrainingPads)
 
 local MapBuilder = require(script.Parent.Parent.Modules.MapBuilder)
 
 local WorldService = {}
 
-type ZoneArea = { Zone: any, Area: BasePart }
--- A dojo training pad players "Hold E" on; they train standing on Stand, facing the item.
-export type Station = { Id: string, Zone: any, Model: Model, Stand: BasePart }
-
-local zones: { ZoneArea } = {}
-local stations: { [string]: Station } = {}
+local trainingPads: { TrainingPads.Pad } = {}
 local padPart: BasePart? = nil
 
 local function cleanupTemplate()
@@ -80,24 +75,9 @@ local function setupLighting()
 	color.TintColor = Color3.fromRGB(255, 252, 245)
 end
 
-local function pointInPart(part: BasePart, position: Vector3): boolean
-	local localPoint = part.CFrame:PointToObjectSpace(position)
-	local half = part.Size / 2
-	return math.abs(localPoint.X) <= half.X and math.abs(localPoint.Y) <= half.Y and math.abs(localPoint.Z) <= half.Z
-end
-
--- The training zone containing `position`, or nil.
-function WorldService:GetZoneAt(position: Vector3)
-	for _, entry in zones do
-		if entry.Area.Parent and pointInPart(entry.Area, position) then
-			return entry.Zone
-		end
-	end
-	return nil
-end
-
-function WorldService:GetStation(stationId: string): Station?
-	return stations[stationId]
+-- The training pad someone at `position` is standing on, if any.
+function WorldService:GetTrainingPadAt(position: Vector3): TrainingPads.Pad?
+	return TrainingPads.At(trainingPads, position)
 end
 
 function WorldService:GetPadPosition(): Vector3
@@ -125,24 +105,14 @@ function WorldService:Init()
 		print(`[Kung Fu Chop!] Applied square stud texture to {upgraded} parts`)
 	end
 
-	local zonesFolder = root:FindFirstChild("TrainingZones")
+	trainingPads = TrainingPads.Collect(root)
 	for _, zone in Config.TrainingZones do
-		local model = zonesFolder and zonesFolder:FindFirstChild("Zone_" .. zone.Id)
-		local area = model and model:FindFirstChild("Area")
-		if area and area:IsA("BasePart") then
-			table.insert(zones, { Zone = zone, Area = area })
-		else
-			warn(`[Kung Fu Chop!] Training zone "{zone.Id}" is missing from Workspace.Map`)
+		local found = false
+		for _, pad in trainingPads do
+			found = found or pad.ZoneId == zone.Id
 		end
-		local stationFolder = model and model:FindFirstChild("Stations")
-		if stationFolder then
-			for _, station in stationFolder:GetChildren() do
-				local stationId = station:GetAttribute("StationId")
-				local stand = station:FindFirstChild("Stand")
-				if station:IsA("Model") and type(stationId) == "string" and stand and stand:IsA("BasePart") then
-					stations[stationId] = { Id = stationId, Zone = zone, Model = station, Stand = stand }
-				end
-			end
+		if not found then
+			warn(`[Kung Fu Chop!] Training floor "{zone.Id}" has no TrainPad in Workspace.Map`)
 		end
 	end
 

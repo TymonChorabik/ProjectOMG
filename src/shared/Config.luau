@@ -4,9 +4,9 @@
 	Shared by the server (authoritative math), the client (display) and the map baker.
 
 	Game loop (one big studded hub, like +1 Stone Skipping):
-	  1. Train  – "Hold E" on a pad in a dojo (right side): your character breaks that dojo's item
-	              (boards, bamboo, ice, bricks...) over and over for +Strength. This is the only
-	              way to gain Strength. Better dojos unlock with rebirths or Robux.
+	  1. Train  – stand on the pad of a training floor (right side): your character chops that
+	              floor's item (boards, bamboo, ice, bricks...) over and over for +Strength. This
+	              is the only way to gain Strength. Better floors unlock with rebirths or Robux.
 	  2. Smash  – step on the launch pad and charge down the Board Wall lane. You break every wall
 	              your Strength can handle; each broken wall pays Wins.
 	  3. Equip  – Wins unlock better hand wraps / gauntlets (left side) that add more per chop.
@@ -67,13 +67,9 @@ Config.Assets = {
 --------------------------------------------------------------------------------
 
 Config.Training = {
-	-- Strength only comes from the dojos: "Hold E" on a training pad and your character breaks
-	-- the zone's item (boards, bamboo, ice...) over and over. Every IdleInterval seconds you
-	-- earn one chop's Strength while you stay on the pad (within StationRange studs).
+	-- Strength only comes from the training floors: stand on a floor's pad and every
+	-- IdleInterval seconds you chop that floor's item for one chop's Strength.
 	IdleInterval = 0.6,
-	StationRange = 5,
-	-- How far from the pad the server still accepts StartTraining (prompt reach + lag).
-	StationStartRange = 16,
 }
 
 -- Auto Smash game pass: while it's switched on and you stand on the launch pad, a new wall run
@@ -82,10 +78,12 @@ Config.AutoSmash = {
 	Delay = 1.5,
 }
 
--- Training zones (dojos), laid out side by side on the right of the hub (see MapBuilder).
--- Unlock with rebirths (RequiredRebirths) or a game pass (Pass). Like the ponds in Stone
--- Skipping, each dojo is a long pit lined with training pads; on each pad you break the dojo's
--- Breakable over and over (Kind picks the model in MapBuilder, Material is an Enum.Material name).
+-- Training floors, side by side on the right of the hub (see MapBuilder), like the ponds in
+-- Stone Skipping: a long pool with one pad at the near end. Stand on the pad to train; other
+-- players on the same pad are hidden for you, so it feels like your own floor. Better floors
+-- unlock with rebirths (RequiredRebirths) or a game pass (Pass). Your chop breaks the floor's
+-- Breakable on the pillar in front of the pad (Kind picks the model in MapBuilder, Material is
+-- an Enum.Material name).
 Config.TrainingZones = {
 	{
 		Id = "Wooden",

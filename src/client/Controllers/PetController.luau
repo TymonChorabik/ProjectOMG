@@ -16,6 +16,7 @@ type Follower = { Model: Model, Current: CFrame }
 
 local folder: Folder
 local followers: { [Player]: { Ids: string, Pets: { Follower } } } = {}
+local hidden: { [Player]: boolean } = {}
 
 local function clear(player: Player)
 	local entry = followers[player]
@@ -38,7 +39,7 @@ local function rebuild(player: Player)
 	local pets = {}
 	for petId in string.gmatch(ids, "[^,]+") do
 		local model = PetModels.Build(petId)
-		model.Parent = folder
+		model.Parent = if hidden[player] then nil else folder
 		table.insert(pets, { Model = model, Current = CFrame.new() })
 	end
 	followers[player] = { Ids = ids, Pets = pets }
@@ -49,6 +50,24 @@ local function watch(player: Player)
 	player:GetAttributeChangedSignal("PetIds"):Connect(function()
 		rebuild(player)
 	end)
+end
+
+-- Hides a player's pets on this client (players training on your pad are hidden).
+function PetController.SetHidden(player: Player, isHidden: boolean)
+	if (hidden[player] == true) == isHidden then
+		return
+	end
+	if isHidden then
+		hidden[player] = true
+	else
+		hidden[player] = nil
+	end
+	local entry = followers[player]
+	if entry then
+		for _, pet in entry.Pets do
+			pet.Model.Parent = if isHidden then nil else folder
+		end
+	end
 end
 
 -- Slots behind the owner: a row of up to 3, then a second row.
@@ -92,7 +111,10 @@ function PetController.Start()
 	for _, player in Players:GetPlayers() do
 		watch(player)
 	end
-	Players.PlayerRemoving:Connect(clear)
+	Players.PlayerRemoving:Connect(function(player)
+		clear(player)
+		hidden[player] = nil
+	end)
 	RunService.RenderStepped:Connect(step)
 end
 
