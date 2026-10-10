@@ -71,10 +71,10 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 		Title = "Playtime Rewards",
 		Name = "Gifts",
 		Icon = "🎁",
-		Size = Vector2.new(780, 580),
+		Size = Vector2.new(780, 552),
 		Parent = parent,
 	})
-	local grid = MenuWindow.Grid(window.Content, 1, Vector2.new(170, 150), 12)
+	local grid = MenuWindow.Grid(window.Content, 1, Vector2.new(0, 150), nil, 4)
 
 	local tiles = {}
 	local count = #Config.PlaytimeRewards

@@ -60,8 +60,8 @@ function RebirthMenu.new(parent: Instance, ctx: { [string]: any })
 	local body = Create("Frame", {
 		Name = "Body",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(16, 56),
-		Size = UDim2.new(1, -32, 1, -70),
+		Position = UDim2.fromOffset(10, 56),
+		Size = UDim2.new(1, -20, 1, -64),
 		ZIndex = 2,
 		Parent = window.Instance,
 	})

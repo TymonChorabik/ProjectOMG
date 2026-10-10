@@ -64,7 +64,7 @@ local function card(parent: Instance, order: number, color: Color3, rainbow: boo
 	local frame = MenuWindow.Card({
 		Parent = parent,
 		Order = order,
-		Size = UDim2.new(1, -8, 0, CARD_HEIGHT),
+		Size = UDim2.new(1, 0, 0, CARD_HEIGHT),
 		Color = color,
 		Rainbow = rainbow,
 	})

@@ -66,25 +66,6 @@ local PILES = {
 
 local price = Theme.Price
 
--- Short effect shown big on a gamepass card.
-local function passBadge(name: string): string
-	for _, zone in Config.TrainingZones do
-		if zone.Pass == name then
-			return `x{zone.Multiplier}`
-		end
-	end
-	if name == "PetSlots" then
-		return `+{Config.PetsConfig.ExtraSlots}`
-	elseif name == "PhoenixRelic" then
-		return `+{NumberFormat.Percent(Config.PremiumItem.BetterBy)}`
-	elseif name == "LionKing" then
-		return `+{NumberFormat.Percent(Config.Pets.LionKing.AlwaysBetterBy or 0)}`
-	elseif name == "AutoSmash" then
-		return "AUTO"
-	end
-	return "x2"
-end
-
 local function pile(parent: Instance, icon: string, count: number, size: number)
 	for index, offset in PILES[math.clamp(count, 1, 4)] do
 		Create.Icon({
@@ -152,7 +133,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 	MenuWindow.Header(content, 1, "Packs")
 	do
 		local starter = products.StarterPack
-		local card = MenuWindow.Card({ Parent = content, Order = 2, Size = UDim2.new(1, -8, 0, 214), Rainbow = true })
+		local card = MenuWindow.Card({ Parent = content, Order = 2, Size = UDim2.new(1, 0, 0, 214), Rainbow = true })
 		local art = Create("Frame", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0, 0.5),
@@ -215,7 +196,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 	----------------------------------------------------------------------------
 	local function packSection(order: number, title: string, packs, icon: string, color: Color3, unit: string)
 		MenuWindow.Header(content, order, title)
-		local grid = MenuWindow.Grid(content, order + 1, Vector2.new(318, 176), 12)
+		local grid = MenuWindow.Grid(content, order + 1, Vector2.new(0, 176), nil, 2)
 		for index, pack in packs do
 			local product = products[pack.Product]
 			local card = MenuWindow.Card({ Parent = grid, Order = index, Size = UDim2.fromScale(1, 1), Color = color })
@@ -271,7 +252,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 	-- Gamepasses (3 columns)
 	----------------------------------------------------------------------------
 	MenuWindow.Header(content, 7, "Gamepasses")
-	local passGrid = MenuWindow.Grid(content, 8, Vector2.new(208, 238), 12)
+	local passGrid = MenuWindow.Grid(content, 8, Vector2.new(0, 238), nil, 3)
 	for index, entry in PASSES do
 		local pass = passes[entry.Name]
 		local card = MenuWindow.Card({
@@ -293,22 +274,9 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 		Create.Icon({
 			Text = pass.Icon,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, -6, 0, 110),
-			Size = UDim2.fromOffset(120, 120),
+			Position = UDim2.new(0.5, 0, 0, 108),
+			Size = UDim2.fromOffset(124, 124),
 			ZIndex = 5,
-			Parent = card,
-		})
-		-- What it does at a glance ("x2", "+2", "x30"...), over the icon's top-right.
-		Create.Label({
-			Text = passBadge(entry.Name),
-			TextXAlignment = Enum.TextXAlignment.Right,
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -10, 0, 72),
-			Size = UDim2.fromOffset(130, 52),
-			Rotation = -6,
-			StrokeThickness = 5.5,
-			MaxTextSize = 46,
-			ZIndex = 7,
 			Parent = card,
 		})
 		local button = MenuWindow.PriceButton({
@@ -331,7 +299,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 		local card = MenuWindow.Card({
 			Parent = content,
 			Order = 10,
-			Size = UDim2.new(1, -8, 0, 252),
+			Size = UDim2.new(1, 0, 0, 252),
 			Color = Color3.fromRGB(110, 220, 60),
 		})
 		Create.Label({
@@ -436,7 +404,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 		local card = MenuWindow.Card({
 			Parent = content,
 			Order = 12,
-			Size = UDim2.new(1, -8, 0, 190),
+			Size = UDim2.new(1, 0, 0, 190),
 			Gradient = ColorSequence.new(Color3.fromRGB(40, 210, 120), Color3.fromRGB(40, 110, 255)),
 		})
 		pile(
@@ -487,7 +455,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 		})
 		button.Activated:Connect(buy("product:BoostBundle"))
 	end
-	local boostGrid = MenuWindow.Grid(content, 13, Vector2.new(208, 232), 12)
+	local boostGrid = MenuWindow.Grid(content, 13, Vector2.new(0, 232), nil, 3)
 	for index, entry in BOOSTS do
 		local product = products[entry.Product]
 		local boost = Config.Boosts[entry.Kind]
@@ -538,7 +506,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 		local card = MenuWindow.Card({
 			Parent = content,
 			Order = 15,
-			Size = UDim2.new(1, -8, 0, 196),
+			Size = UDim2.new(1, 0, 0, 196),
 			Gradient = ColorSequence.new(Color3.fromRGB(40, 210, 120), Color3.fromRGB(40, 110, 255)),
 		})
 		Create.Label({

@@ -8,7 +8,9 @@
 
 	Content helpers:
 	• MenuWindow.Header(parent, order, text)        "~ Section ~" title
-	• MenuWindow.Grid(parent, order, cellSize)     grid that grows with its content
+	• MenuWindow.Grid(parent, order, cellSize, padding?, columns?)
+	                                                grid that grows with its content; with
+	                                                columns, the cells stretch to fill the width
 	• MenuWindow.Card({...})                        big studded plastic card (offers, stats)
 	• MenuWindow.PriceButton({...}) / WasPrice()    green price button / slashed old price
 	• MenuWindow.Tile({...})                        studded coloured tile: title on top, icon /
@@ -38,6 +40,7 @@ export type WindowProps = {
 }
 
 local DEFAULT_SIZE = Vector2.new(720, 500)
+local GAP = 8 -- space between cards, and between the cards and the window edge
 local OPEN_INFO = TweenInfo.new(0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local CLOSE_INFO = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local ICON_INFO = TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
@@ -113,11 +116,11 @@ function MenuWindow.new(props: WindowProps)
 		Name = "Content",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(16, 60),
-		Size = UDim2.new(1, -32, 1, -76),
+		Position = UDim2.fromOffset(GAP, 58),
+		Size = UDim2.new(1, -GAP * 2, 1, -58 - GAP),
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 8,
+		ScrollBarThickness = 5,
 		ScrollBarImageColor3 = props.Color or Theme.Colors.White,
 		ScrollBarImageTransparency = 0.25,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -126,14 +129,14 @@ function MenuWindow.new(props: WindowProps)
 	}, {
 		Create("UIListLayout", {
 			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0, 12),
+			Padding = UDim.new(0, GAP),
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		}),
 		Create("UIPadding", {
-			PaddingTop = UDim.new(0, 8),
-			PaddingBottom = UDim.new(0, 14),
-			PaddingLeft = UDim.new(0, 4),
-			PaddingRight = UDim.new(0, 12),
+			PaddingTop = UDim.new(0, 6),
+			PaddingBottom = UDim.new(0, GAP),
+			PaddingLeft = UDim.new(0, 3),
+			PaddingRight = UDim.new(0, 7), -- room for the thin scroll bar
 		}),
 	})
 	self.Content = scroll
@@ -198,7 +201,7 @@ function MenuWindow.Header(parent: Instance, order: number, text: string): TextL
 		Name = "Header",
 		LayoutOrder = order,
 		Text = `~ {text} ~`,
-		Size = UDim2.new(1, -8, 0, 46),
+		Size = UDim2.new(1, 0, 0, 46),
 		StrokeThickness = 4,
 		MaxTextSize = 40,
 		ZIndex = 2,
@@ -206,20 +209,25 @@ function MenuWindow.Header(parent: Instance, order: number, text: string): TextL
 	})
 end
 
--- A grid of tiles that grows with its content.
-function MenuWindow.Grid(parent: Instance, order: number, cellSize: Vector2, padding: number?): Frame
+-- A grid of tiles that grows with its content. With `columns`, cells stretch so that many
+-- fill the full width (only cellSize.Y is used), edge to edge like the reference shop.
+function MenuWindow.Grid(parent: Instance, order: number, cellSize: Vector2, padding: number?, columns: number?): Frame
+	local gap = padding or GAP
+	local cell = if columns
+		then UDim2.new(1 / columns, -gap * (columns - 1) / columns, 0, cellSize.Y)
+		else UDim2.fromOffset(cellSize.X, cellSize.Y)
 	return Create("Frame", {
 		Name = "Grid",
 		LayoutOrder = order,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -4, 0, 0),
+		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		ZIndex = 2,
 		Parent = parent,
 	}, {
 		Create("UIGridLayout", {
-			CellSize = UDim2.fromOffset(cellSize.X, cellSize.Y),
-			CellPadding = UDim2.fromOffset(padding or 10, padding or 10),
+			CellSize = cell,
+			CellPadding = UDim2.fromOffset(gap, gap),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		}),

@@ -32,6 +32,8 @@ local GRID_COLOR = Color3.fromRGB(20, 20, 26)
 local INFO_COLOR = Color3.fromRGB(70, 70, 84)
 local INFO_WIDTH = 236
 local CELL = Vector2.new(96, 106)
+local COLUMNS = 5 -- grid cells stretch so this many fill the grid's width
+local CELL_GAP = 6
 local TOP = 52 -- grid / info panel start below the count line
 local BOTTOM = 72 -- action bar height
 
@@ -188,8 +190,8 @@ local function scaffold(body: Instance, name: string)
 		Name = "GridHolder",
 		BackgroundColor3 = GRID_COLOR,
 		BackgroundTransparency = 0.45,
-		Position = UDim2.fromOffset(INFO_WIDTH + 12, TOP),
-		Size = UDim2.new(1, -(INFO_WIDTH + 12), 1, -(TOP + BOTTOM)),
+		Position = UDim2.fromOffset(INFO_WIDTH + 8, TOP),
+		Size = UDim2.new(1, -(INFO_WIDTH + 8), 1, -(TOP + BOTTOM)),
 		ZIndex = 3,
 		Parent = page,
 	}, { Create.Corner(UDim.new(0, 14)), Create.Stroke(3.5) })
@@ -208,15 +210,15 @@ local function scaffold(body: Instance, name: string)
 		Parent = gridHolder,
 	}, {
 		Create("UIGridLayout", {
-			CellSize = UDim2.fromOffset(CELL.X, CELL.Y),
-			CellPadding = UDim2.fromOffset(8, 8),
+			CellSize = UDim2.new(1 / COLUMNS, -CELL_GAP * (COLUMNS - 1) / COLUMNS, 0, CELL.Y),
+			CellPadding = UDim2.fromOffset(CELL_GAP, CELL_GAP),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 		Create("UIPadding", {
-			PaddingTop = UDim.new(0, 8),
-			PaddingBottom = UDim.new(0, 8),
-			PaddingLeft = UDim.new(0, 8),
-			PaddingRight = UDim.new(0, 8),
+			PaddingTop = UDim.new(0, CELL_GAP),
+			PaddingBottom = UDim.new(0, CELL_GAP),
+			PaddingLeft = UDim.new(0, CELL_GAP),
+			PaddingRight = UDim.new(0, CELL_GAP + 4), -- + the scroll bar
 		}),
 	})
 	local empty = label(gridHolder, {
@@ -734,8 +736,8 @@ function InventoryMenu.new(parent: Instance, ctx: { [string]: any })
 	local body = Create("Frame", {
 		Name = "Body",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(18, 58),
-		Size = UDim2.new(1, -36, 1, -66),
+		Position = UDim2.fromOffset(10, 58),
+		Size = UDim2.new(1, -20, 1, -66),
 		ZIndex = 2,
 		Parent = window.Instance,
 	})
