@@ -3,7 +3,7 @@
 Train your chop, then **smash through a wall of boards** as far as your Strength takes you.
 One big studded hub, laid out like *+1 Stone Skipping*:
 
-* **Right side – training floors.** Like the ponds in Stone Skipping: long pools side by side,
+* **Right side – training floors.** Like the ponds in Stone Skipping: small pools side by side,
   each with a pad at the near end. **Stand on a pad** and you train automatically: your
   character chops a slash at the floor's item (wooden boards → bamboo → ice → bricks → gold bars
   → obsidian → star crystals), which shatters into the water, and every chop gives

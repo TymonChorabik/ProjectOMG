@@ -22,7 +22,7 @@ MAP_DIR = os.path.join(ROOT, "src", "workspace", "Map")
 VIEWS = {
     "Hub": (-360, 270, -190, 130),
     "Lane": (-150, 150, 40, 1000),
-    "Training": (-312, -66, -44, 60),
+    "Training": (-284, -66, -44, 8),
 }
 OUT_DIR = os.path.join(ROOT, "docs", "map")
 

@@ -39,7 +39,7 @@ local CLIFF = { Color3.fromRGB(176, 120, 70), Color3.fromRGB(150, 98, 56) }
 local INK = Color3.fromRGB(25, 20, 30)
 local WHITE = Color3.new(1, 1, 1)
 
-local ZONE = { FirstX = -86, Spacing = 34, Width = 28, MinZ = -30, Length = 86 }
+local ZONE = { FirstX = -86, Spacing = 30, Width = 24, MinZ = -30, Length = 32 }
 local ITEMS = { FirstX = 76, Spacing = 36, FirstZ = -14, RowSpacing = 32, PerRow = 5 }
 local SPAWN_POSITION = Vector3.new(0, 0.6, -18)
 
@@ -481,7 +481,7 @@ local function rotateAbout(parent: Instance, origin: Vector3, rotation: CFrame)
 	end
 end
 
--- One training floor, like a Stone Skipping pond: a raised frame, a studded bank, a long pool
+-- One training floor, like a Stone Skipping pond: a raised frame, a studded bank, a small pool
 -- and a studded pad at the near end (corner brackets + an arrow pointing at the pool). Standing
 -- on the pad trains you; your chop breaks the floor's item on the pillar in front of the pad.
 local function buildZone(zonesFolder: Instance, zone, index: number)

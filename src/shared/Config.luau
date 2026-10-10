@@ -79,7 +79,7 @@ Config.AutoSmash = {
 }
 
 -- Training floors, side by side on the right of the hub (see MapBuilder), like the ponds in
--- Stone Skipping: a long pool with one pad at the near end. Stand on the pad to train; other
+-- Stone Skipping: a small pool with one pad at the near end. Stand on the pad to train; other
 -- players on the same pad are hidden for you, so it feels like your own floor. Better floors
 -- unlock with rebirths (RequiredRebirths) or a game pass (Pass). Your chop breaks the floor's
 -- Breakable on the pillar in front of the pad (Kind picks the model in MapBuilder, Material is
