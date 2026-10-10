@@ -207,7 +207,28 @@ def is_emoji(ch):
         or 0x2190 <= o <= 0x21FF
         or 0x2300 <= o <= 0x23FF
         or o in (0x00A9, 0x00AE, 0x203C, 0x2049, 0x2122, 0x2139, 0x3030, 0x303D)
+        or o == ROBUX
     )
+
+
+ROBUX = 0xE002  # Roblox draws this private-use character as the Robux icon
+
+
+@lru_cache(maxsize=64)
+def robux_icon(rgb):
+    """The Robux icon (hexagon ring with a square in the middle) in the text colour."""
+    import math
+
+    img = Image.new("RGBA", (160, 160), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+
+    def hexagon(r):
+        return [(80 + r * math.sin(math.pi / 3 * i), 80 - r * math.cos(math.pi / 3 * i)) for i in range(6)]
+
+    d.polygon(hexagon(74), fill=rgb + (255,))
+    d.polygon(hexagon(48), fill=(0, 0, 0, 0))
+    d.rectangle((62, 62, 98, 98), fill=rgb + (255,))
+    return img.crop(img.getbbox())
 
 
 @lru_cache(maxsize=4096)
@@ -283,7 +304,7 @@ def text_width(text, font_name, px):
     w = 0.0
     for emo, s in runs(text):
         if emo:
-            w += px * 1.12
+            w += px * (0.82 if s == chr(ROBUX) else 1.12)
         else:
             w += f.getlength(s)
     return w
@@ -765,13 +786,15 @@ def draw_text(cv, b, clip):
             line_runs = [(emo, seg, tcolor) for emo, seg in line_runs]
         for emo, s, run_colour in line_runs:
             if emo:
-                im = emoji_image(s)
+                im = robux_icon(tuple(run_colour)) if s == chr(ROBUX) else emoji_image(s)
+                robux = s == chr(ROBUX)
+                advance = fpx * (0.82 if robux else 1.12)  # the Robux glyph is cap-height sized
                 if im is not None:
-                    eh = int(fpx * 0.92)
+                    eh = int(fpx * (0.7 if robux else 0.92))
                     ew = max(1, int(im.width * eh / im.height))
                     em = im.resize((ew, eh), Image.LANCZOS)
-                    ey = int(base - fpx * 0.78)
-                    ex = int(cur + (fpx * 1.12 - ew) / 2)
+                    ey = int(base - fpx * (0.7 if robux else 0.78))
+                    ex = int(cur + (advance - ew) / 2)
                     if st_w > 0:
                         sil = Image.new("RGBA", em.size, st_col + (255,))
                         sil.putalpha(em.getchannel("A"))
@@ -783,7 +806,7 @@ def draw_text(cv, b, clip):
                     if alpha < 255:
                         em.putalpha(em.getchannel("A").point(lambda v: v * alpha // 255))
                     layer.alpha_composite(em, (ex, ey))
-                cur += fpx * 1.12
+                cur += advance
             else:
                 if st_w > 0:
                     ds.text((cur, base), s, font=font, fill=st_col + (int(255 * st_alpha),), anchor="ls",

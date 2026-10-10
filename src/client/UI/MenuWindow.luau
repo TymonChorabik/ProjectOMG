@@ -59,8 +59,8 @@ function MenuWindow.new(props: WindowProps)
 		BorderSizePixel = 0,
 		Visible = false,
 	}, {
-		Create.Corner(UDim.new(0, 18)),
-		Create.Stroke(4),
+		Create.Corner(UDim.new(0, 10)),
+		Create.Stroke(3.5),
 		Create.Glass(),
 	})
 	self.Instance = panel
@@ -71,9 +71,10 @@ function MenuWindow.new(props: WindowProps)
 		Text = props.Title,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0, -6),
-		Size = UDim2.new(1, -230, 0, 86),
-		StrokeThickness = 5.5,
-		MaxTextSize = 74,
+		Size = UDim2.new(1, -230, 0, 90),
+		Font = Theme.Fonts.Display,
+		StrokeThickness = 6.5,
+		MaxTextSize = 80,
 		ZIndex = 6,
 		Parent = panel,
 	})
@@ -93,7 +94,9 @@ function MenuWindow.new(props: WindowProps)
 	local close = ChunkyButton.new({
 		Name = "Close",
 		Text = "X",
-		Color = Theme.Colors.Red,
+		Color = Theme.Colors.Close,
+		Studs = false,
+		Font = Theme.Fonts.Display,
 		Size = UDim2.fromOffset(68, 70),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(1, -10, 0, 4),

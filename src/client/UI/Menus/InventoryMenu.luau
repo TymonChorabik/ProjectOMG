@@ -423,7 +423,7 @@ local function handsTab(body: Instance, ctx: { [string]: any })
 			ui.Primary:SetText("Equipped")
 			ui.Primary:SetColor(Theme.Colors.GrayDark)
 		elseif item.Pass and not owned then
-			ui.Primary:SetText(`R$ {Config.Monetization.GamePasses[item.Pass].Price}`)
+			ui.Primary:SetText(Theme.Price(Config.Monetization.GamePasses[item.Pass].Price))
 			ui.Primary:SetColor(Theme.Colors.Green)
 		elseif unlocked then
 			ui.Primary:SetText("Equip")
@@ -656,7 +656,7 @@ local function boostsTab(body: Instance, ctx: { [string]: any })
 
 	local bundle = products.BoostBundle
 	local bundleButton = button(ui.Actions, {
-		Text = `{bundle.Name}  R$ {bundle.Price}`,
+		Text = `{bundle.Name}  {Theme.Price(bundle.Price)}`,
 		Rainbow = true,
 		Size = UDim2.fromOffset(330, 58),
 		MaxTextSize = 28,
@@ -705,7 +705,7 @@ local function boostsTab(body: Instance, ctx: { [string]: any })
 		ui.Sub.TextColor3 = Theme.Colors.Cream
 		ui.Stat.Text = if left > 0 then `⏱️ {formatTime(left)} left` else "Not active"
 		ui.Stat.TextColor3 = if left > 0 then Theme.Colors.GreenText else Theme.Colors.Gray
-		ui.Primary:SetText(`+{product.Boosts[1].Minutes} min  R$ {product.Price}`)
+		ui.Primary:SetText(`+{product.Boosts[1].Minutes} min  {Theme.Price(product.Price)}`)
 	end
 
 	return {

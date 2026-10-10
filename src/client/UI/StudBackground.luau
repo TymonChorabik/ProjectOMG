@@ -145,7 +145,7 @@ local function buildStuds(parent: GuiObject, options: Options?): Frame
 		ZIndex = 0,
 		Parent = parent,
 	})
-	local edgeTransparency = (options and options.Transparency) or 0.8
+	local edgeTransparency = (options and options.Transparency) or 0.84
 	local cornerRadius = (options and options.CornerRadius) or UDim.new(0, 12)
 	-- Read by tools/uipreview (which has no AbsoluteSize) to draw the same grid.
 	holder:SetAttribute("StudPitch", PITCH)

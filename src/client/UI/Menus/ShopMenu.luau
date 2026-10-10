@@ -64,8 +64,25 @@ local PILES = {
 	{ Vector2.new(-28, 18), Vector2.new(28, 18), Vector2.new(-14, -14), Vector2.new(16, -10) },
 }
 
-local function price(amount: number): string
-	return `R$ {amount}`
+local price = Theme.Price
+
+-- Short effect shown big on a gamepass card.
+local function passBadge(name: string): string
+	for _, zone in Config.TrainingZones do
+		if zone.Pass == name then
+			return `x{zone.Multiplier}`
+		end
+	end
+	if name == "PetSlots" then
+		return `+{Config.PetsConfig.ExtraSlots}`
+	elseif name == "PhoenixRelic" then
+		return `+{NumberFormat.Percent(Config.PremiumItem.BetterBy)}`
+	elseif name == "LionKing" then
+		return `+{NumberFormat.Percent(Config.Pets.LionKing.AlwaysBetterBy or 0)}`
+	elseif name == "AutoSmash" then
+		return "AUTO"
+	end
+	return "x2"
 end
 
 local function pile(parent: Instance, icon: string, count: number, size: number)
@@ -267,27 +284,31 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 		Create.Label({
 			Text = pass.Name,
 			Position = UDim2.fromOffset(8, 8),
-			Size = UDim2.new(1, -16, 0, 36),
+			Size = UDim2.new(1, -16, 0, 34),
 			StrokeThickness = 4,
-			MaxTextSize = 30,
+			MaxTextSize = 28,
 			ZIndex = 6,
 			Parent = card,
 		})
 		Create.Icon({
 			Text = pass.Icon,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0, 108),
-			Size = UDim2.fromOffset(110, 110),
+			Position = UDim2.new(0.5, -6, 0, 110),
+			Size = UDim2.fromOffset(120, 120),
 			ZIndex = 5,
 			Parent = card,
 		})
+		-- What it does at a glance ("x2", "+2", "x30"...), over the icon's top-right.
 		Create.Label({
-			Text = pass.Description,
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -72),
-			Size = UDim2.new(1, -16, 0, 22),
-			StrokeThickness = 2.5,
-			ZIndex = 6,
+			Text = passBadge(entry.Name),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0, 72),
+			Size = UDim2.fromOffset(130, 52),
+			Rotation = -6,
+			StrokeThickness = 5.5,
+			MaxTextSize = 46,
+			ZIndex = 7,
 			Parent = card,
 		})
 		local button = MenuWindow.PriceButton({

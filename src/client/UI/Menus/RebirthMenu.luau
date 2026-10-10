@@ -164,7 +164,7 @@ function RebirthMenu.new(parent: Instance, ctx: { [string]: any })
 	})
 	skipButton.Instance.ZIndex = 3
 	Create.Label({
-		Text = `R${skip.Price}`,
+		Text = `{Theme.Robux}{skip.Price}`,
 		TextColor3 = Theme.Colors.GreenText,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 6, 0, 2),

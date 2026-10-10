@@ -123,7 +123,7 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 	})
 	triple.Instance.ZIndex = 21
 	Create.Label({
-		Text = `R${Config.Monetization.Products.OfflineTriple.Price}`,
+		Text = `{Theme.Robux}{Config.Monetization.Products.OfflineTriple.Price}`,
 		TextColor3 = Theme.Colors.GreenText,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 10, 0, 2),

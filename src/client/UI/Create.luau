@@ -55,7 +55,7 @@ end
 -- Outline for text (chunky cartoon lettering).
 function Create.TextStroke(thickness: number?, color: Color3?): UIStroke
 	return create("UIStroke", {
-		Thickness = thickness or 2.5,
+		Thickness = (thickness or 2.5) * Theme.TextStrokeScale,
 		Color = color or Theme.Colors.Ink,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
 		LineJoinMode = Enum.LineJoinMode.Round,

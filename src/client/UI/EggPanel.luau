@@ -215,7 +215,7 @@ function EggPanel:_rebuild()
 	self._title.TextColor3 = if egg.Rainbow then Theme.Colors.Pink else Theme.Colors.White
 	self._price.Text = if egg.Cost
 		then `🏆 {NumberFormat.Abbreviate(egg.Cost)} Wins each`
-		else `R$ {Config.Monetization.Products[egg.Product].Price} each`
+		else `{Theme.Price(Config.Monetization.Products[egg.Product].Price)} each`
 	self._luck.Visible = luck
 
 	for order, entry in Formulas.GetEggOdds(egg.Id, luck) do
@@ -252,7 +252,7 @@ function EggPanel:_rebuild()
 
 	for count, entry in self._buttons do
 		local product = if count == 1 then egg.Product else egg.MultiProducts and egg.MultiProducts[count]
-		entry.Price.Text = if product then `R${Config.Monetization.Products[product].Price}` else ""
+		entry.Price.Text = if product then `{Theme.Robux}{Config.Monetization.Products[product].Price}` else ""
 		entry.Button.Instance.Visible = egg.Cost ~= nil or product ~= nil
 	end
 end

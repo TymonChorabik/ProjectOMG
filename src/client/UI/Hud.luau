@@ -36,7 +36,7 @@ end
 
 -- "ONLY R$49" with ONLY in orange and the price in Robux green.
 local function onlyPrice(price: number): string
-	return `<font color="{hex(Theme.Colors.Orange)}">ONLY</font> <font color="{hex(Theme.Colors.GreenText)}">R${price}</font>`
+	return `<font color="{hex(Theme.Colors.Orange)}">ONLY</font> <font color="{hex(Theme.Colors.GreenText)}">{Theme.Robux}{price}</font>`
 end
 
 local function container(props: { [string]: any }): (Frame, UIScale)
@@ -373,7 +373,7 @@ function Hud.new(gui: ScreenGui)
 		button.Label.ZIndex = 4
 		Create.Label({
 			Name = "Price",
-			Text = `R${product.Price}`,
+			Text = `{Theme.Robux}{product.Price}`,
 			TextColor3 = Theme.Colors.GreenText,
 			TextXAlignment = Enum.TextXAlignment.Right,
 			AnchorPoint = Vector2.new(1, 0.5),

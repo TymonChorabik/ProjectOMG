@@ -26,7 +26,8 @@ Theme.Colors = {
 	Gray = Color3.fromRGB(130, 130, 140),
 	GrayDark = Color3.fromRGB(78, 78, 88),
 	Ink = Color3.fromRGB(18, 14, 22), -- outlines & text strokes
-	Window = Color3.fromRGB(64, 66, 82), -- translucent window body (top of its glass gradient)
+	Window = Color3.fromRGB(40, 42, 54), -- translucent window body (top of its glass gradient)
+	Close = Color3.fromRGB(255, 40, 80), -- window close buttons
 	Tile = Color3.fromRGB(64, 64, 72), -- HUD menu tiles
 	Navy = Color3.fromRGB(28, 52, 96), -- claimed / disabled tiles
 	-- Older names kept for menus that still use them.
@@ -39,14 +40,25 @@ Theme.Colors = {
 
 -- Roblox renders the Gotham fonts as Montserrat: the heavy geometric lettering of the genre.
 Theme.Fonts = {
-	Title = Enum.Font.GothamBlack,
+	Title = Enum.Font.GothamBold,
 	Body = Enum.Font.GothamBold,
+	Display = Enum.Font.FredokaOne, -- big rounded window titles
 }
 
-Theme.CornerRadius = UDim.new(0, 12)
+-- Text outlines are drawn at this fraction of the thickness each label asks for.
+Theme.TextStrokeScale = 0.8
+
+-- Roblox renders this private-use character as the Robux icon in its fonts.
+Theme.Robux = utf8.char(0xE002)
+
+function Theme.Price(amount: number): string
+	return `{Theme.Robux} {amount}`
+end
+
+Theme.CornerRadius = UDim.new(0, 6)
 Theme.StrokeThickness = 3
 Theme.ButtonDepth = 4 -- px of "plastic" below each chunky button
-Theme.WindowTransparency = 0.38 -- window bodies: dark glass, the world shows through
+Theme.WindowTransparency = 0.4 -- window bodies: dark glass, the world shows through
 
 -- Rainbow used by premium buttons (+1M pack, x3 offline claim, Rainbow Egg).
 Theme.Rainbow = ColorSequence.new({
@@ -68,7 +80,7 @@ function Theme.Gradient(color: Color3): ColorSequence
 end
 
 -- Dark glass windows: multiplies Colors.Window, fading darker towards the bottom.
-Theme.GlassGradient = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(115, 115, 130))
+Theme.GlassGradient = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 185))
 
 -- Darken a colour for bevel/shadow layers.
 function Theme.Shade(color: Color3, amount: number): Color3

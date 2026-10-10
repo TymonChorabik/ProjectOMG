@@ -104,6 +104,7 @@ function ChunkyButton.new(props: ButtonProps)
 	if props.Studs ~= false then
 		StudBackground.Apply(face, { CornerRadius = radius })
 	end
+	StudPanel.Shine(face, radius)
 
 	local textColor = props.TextColor or Theme.Colors.White
 	local font = props.Font or Theme.Fonts.Title

@@ -53,6 +53,22 @@ function StudPanel.Paint(surface: GuiObject, color: Color3, rainbow: boolean?, g
 	end
 end
 
+-- Thin light line just inside the outline: the lit edge of the plastic.
+function StudPanel.Shine(surface: GuiObject, radius: UDim?)
+	local corner = radius or Theme.CornerRadius
+	Create("Frame", {
+		Name = "Shine",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(2, 2),
+		Size = UDim2.new(1, -4, 1, -4),
+		ZIndex = surface.ZIndex,
+		Parent = surface,
+	}, {
+		Create.Corner(UDim.new(corner.Scale, math.max(0, corner.Offset - 2))),
+		Create.Stroke(2, Color3.new(1, 1, 1), 0.62),
+	})
+end
+
 function StudPanel.new(props: PanelProps): Frame
 	local radius = props.CornerRadius or Theme.CornerRadius
 	local color = props.Color or Theme.Colors.Panel
@@ -73,6 +89,9 @@ function StudPanel.new(props: PanelProps): Frame
 
 	if props.Studs ~= false then
 		StudBackground.Apply(panel, { CornerRadius = radius })
+	end
+	if (props.StrokeThickness or Theme.StrokeThickness) > 0 then
+		StudPanel.Shine(panel, radius)
 	end
 
 	if props.Parent then
