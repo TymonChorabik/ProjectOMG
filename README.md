@@ -5,7 +5,7 @@ One big studded hub, laid out like *+1 Stone Skipping*:
 
 * **Right side – training zones.** Chop for **+Strength**, or **hold E at a wooden dummy** and your
   character punches it on its own (idle training). Better zones (x4, x10, x20) unlock with rebirths; x30 / x75 / x200 zones are Robux passes.
-* **Centre – the Board Wall lane.** Step on the launch pad and press **SMASH!** Your character
+* **Centre – the Board Wall lane.** Step on the launch pad and press **E** to smash. Your character
   flies down the lane and breaks every wall your Strength can handle through 6 biomes (Bamboo
   Grove → Autumn Temple → Frost Peak → Lava Fortress → Sky Palace → Cosmic Rift). Every broken
   wall pays **Wins**.
@@ -48,9 +48,9 @@ in-memory data and shows a "progress won't be saved" message. Leaderboards also 
 
 | Action | How |
 |---|---|
-| Chop (train) | Click / tap the world, press **F** / **R2**, or hit **CHOP!** |
+| Chop (train) | Click / tap the world, or press **F** / **R2** |
 | Idle training | Walk up to a wooden dummy and **hold E**. Move or jump to stop |
-| Smash the wall | Stand on the yellow launch pad and press **SMASH!** (or **E**) |
+| Smash the wall | Stand on the yellow launch pad and press **E** (or tap the **Smash!** prompt) |
 | Equip hand items | Walk up to a pedestal and press **E**, or use **Inventory** |
 | Hatch eggs | Walk up to an egg and press **E** |
 | Menus | Shop, Rebirth, Pets, Trails, Inventory, Gifts (left side) |

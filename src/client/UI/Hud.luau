@@ -4,10 +4,10 @@
 	everything down on smaller screens):
 	• Left         – 2x3 menu tiles: Shop, Rebirth (+%), Pets, Trails, Inventory, Gifts
 	• Bottom-left  – rebirths, wins, friend boost
-	• Bottom       – ⚡ Strength + multiplier, studded Level bar, three Robux Strength packs
-	• Top          – AUTO CHOP (turns into an on/off toggle once owned) + run distance
+	• Bottom       – ⚡ Strength + multiplier, studded Level bar, and under it the +10K / +100K /
+	                 +1M Strength packs plus AUTO CHOP (an on/off toggle once owned)
+	• Top          – run distance (during a wall run)
 	• Right        – Starter Pack, 2x Strength, 2x Wins offers + active boost timers
-	• Bottom-right – CHOP! / SMASH! button
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -27,7 +27,7 @@ local Hud = {}
 local PULSE_INFO = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local HOVER_INFO = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local TILE = Vector2.new(86, 90)
-local BOTTOM_WIDTH = 690
+local BOTTOM_WIDTH = 740
 local LEVEL_HEIGHT = 72
 
 local function hex(color: Color3): string
@@ -165,7 +165,6 @@ function Hud.new(gui: ScreenGui)
 		PackPressed = Signal.new(), -- (productName)
 		OfferPressed = Signal.new(), -- ("pass:X" | "product:X")
 		AutoChopPressed = Signal.new(),
-		ActionPressed = Signal.new(),
 	}
 
 	----------------------------------------------------------------------------
@@ -341,7 +340,8 @@ function Hud.new(gui: ScreenGui)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	local packWidth = math.floor((BOTTOM_WIDTH - 24) / 3)
+	-- Three packs + AUTO CHOP share the row under the level bar.
+	local packWidth = math.floor((BOTTOM_WIDTH - 36) / 4)
 	for order, entry in
 		{
 			{ Product = "Strength10K", Label = "+10K", Color = Color3.fromRGB(255, 190, 30) },
@@ -389,45 +389,46 @@ function Hud.new(gui: ScreenGui)
 		hud.StrengthPacks[entry.Product] = button
 	end
 
-	----------------------------------------------------------------------------
-	-- Top: auto chop + run distance
-	----------------------------------------------------------------------------
-	local top, topScale = container({
-		Name = "Top",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 14),
-		Size = UDim2.fromOffset(280, 180),
-		Parent = gui,
-	})
-	table.insert(hud.Scales, topScale)
 	hud.AutoChopButton = offerButton({
 		Name = "AutoChop",
 		Title = "AUTO CHOP",
 		Color = Theme.Colors.Red,
-		Size = UDim2.fromOffset(280, 76),
+		Size = UDim2.fromOffset(packWidth, 74),
 		Price = Config.Monetization.GamePasses.AutoChop.Price,
-		MaxTextSize = 36,
-		Parent = top,
+		LayoutOrder = 4,
+		MaxTextSize = 28,
+		Parent = packs,
 	})
 	Create.Icon({
 		Text = "🤖",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0, 6, 0, 8),
-		Size = UDim2.fromOffset(62, 62),
-		Rotation = -12,
+		Position = UDim2.new(1, -4, 0, 4),
+		Size = UDim2.fromOffset(48, 48),
+		Rotation = 12,
 		ZIndex = 9,
 		Parent = hud.AutoChopButton.Instance,
 	})
 	hud.AutoChopButton.Activated:Connect(function()
 		hud.AutoChopPressed:Fire()
 	end)
+
+	----------------------------------------------------------------------------
+	-- Top: run distance
+	----------------------------------------------------------------------------
+	local top, topScale = container({
+		Name = "Top",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 14),
+		Size = UDim2.fromOffset(440, 80),
+		Parent = gui,
+	})
+	table.insert(hud.Scales, topScale)
 	hud.DistanceLabel = Create.Label({
 		Name = "Distance",
 		Text = "0 m",
 		Font = Enum.Font.FredokaOne,
 		TextColor3 = Theme.Colors.Gold,
-		Position = UDim2.fromOffset(-80, 92),
-		Size = UDim2.new(1, 160, 0, 70),
+		Size = UDim2.fromScale(1, 1),
 		StrokeThickness = 4,
 		Visible = false,
 		Parent = top,
@@ -507,33 +508,6 @@ function Hud.new(gui: ScreenGui)
 		}),
 	})
 
-	----------------------------------------------------------------------------
-	-- Bottom-right: CHOP! / SMASH!
-	----------------------------------------------------------------------------
-	local actionHolder, actionScale = container({
-		Name = "ActionHolder",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -22, 1, -22),
-		Size = UDim2.fromOffset(124, 124),
-		Parent = gui,
-	})
-	table.insert(hud.Scales, actionScale)
-	hud.ActionButton = ChunkyButton.new({
-		Name = "Action",
-		Text = "CHOP!",
-		Color = Theme.Colors.Red,
-		Size = UDim2.fromScale(1, 1),
-		CornerRadius = UDim.new(0, 28),
-		Depth = 6,
-		MaxTextSize = 34,
-		StrokeThickness = 3.5,
-		Silent = true,
-		Parent = actionHolder,
-	})
-	hud.ActionButton.Activated:Connect(function()
-		hud.ActionPressed:Fire()
-	end)
-
 	return hud
 end
 
@@ -545,19 +519,16 @@ function Hud.SetLevel(hud, level: number, progress: number, rightText: string, m
 	StudPanel.SetColor(hud._levelPlastic, if maxed then Theme.Colors.Green else Theme.Colors.Blue)
 end
 
--- AUTO CHOP button: Robux offer until owned, then an on/off toggle.
+-- AUTO CHOP button: Robux offer ("ONLY R$25") until owned, then an ON / OFF toggle.
 function Hud.SetAutoChop(hud, owned: boolean, on: boolean)
 	local button = hud.AutoChopButton
-	button.PriceLabel.Visible = not owned
 	if owned then
-		button.Label.Size = UDim2.new(1, -14, 1, -12)
-		button.Label.Position = UDim2.fromOffset(7, 6)
-		button:SetText(if on then "AUTO CHOP: ON" else "AUTO CHOP: OFF")
+		button.PriceLabel.Text = if on
+			then `<font color="{hex(Theme.Colors.GreenText)}">ON</font>`
+			else `<font color="{hex(Color3.fromRGB(255, 110, 110))}">OFF</font>`
 		button:SetColor(if on then Theme.Colors.Green else Theme.Colors.GrayDark)
 	else
-		button.Label.Size = UDim2.new(1, -14, 0.64, 0)
-		button.Label.Position = UDim2.fromOffset(7, 6)
-		button:SetText("AUTO CHOP")
+		button.PriceLabel.Text = onlyPrice(Config.Monetization.GamePasses.AutoChop.Price)
 		button:SetColor(Theme.Colors.Red)
 	end
 end

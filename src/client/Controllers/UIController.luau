@@ -20,7 +20,6 @@ local Create = require(script.Parent.Parent.UI.Create)
 local HatchOverlay = require(script.Parent.Parent.UI.HatchOverlay)
 local Hud = require(script.Parent.Parent.UI.Hud)
 local Popups = require(script.Parent.Parent.UI.Popups)
-local Theme = require(script.Parent.Parent.UI.Theme)
 local WelcomeBack = require(script.Parent.Parent.UI.WelcomeBack)
 local GiftsMenu = require(script.Parent.Parent.UI.Menus.GiftsMenu)
 local InventoryMenu = require(script.Parent.Parent.UI.Menus.InventoryMenu)
@@ -180,13 +179,6 @@ function UIController.Start()
 			purchase("pass:AutoChop")
 		end
 	end)
-	hud.ActionPressed:Connect(function()
-		if LaneController.IsOnPad() then
-			LaneController.TryRun()
-		else
-			ChopController.Chop()
-		end
-	end)
 
 	local function refreshAutoChop()
 		local data = ClientData.Data
@@ -195,13 +187,6 @@ function UIController.Start()
 	end
 	ChopController.AutoChopChanged:Connect(refreshAutoChop)
 
-	LaneController.PadChanged:Connect(function(onPad: boolean)
-		hud.ActionButton:SetText(if onPad then "SMASH!" else "CHOP!")
-		hud.ActionButton:SetColor(if onPad then Theme.Colors.Yellow else Theme.Colors.Red)
-		if onPad then
-			hud.ActionButton:Pulse()
-		end
-	end)
 	LaneController.RunProgress:Connect(function(meters: number?)
 		hud.DistanceLabel.Visible = meters ~= nil
 		if meters then

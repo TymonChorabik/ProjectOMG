@@ -1,7 +1,7 @@
 --[[
 	LaneController.luau
 	The Board Wall run, client side.
-	• Detects when you stand on the launch pad (SMASH! button + "Smash!" prompt).
+	• Detects when you stand on the launch pad (the "Smash!" prompt: E / tap).
 	• Asks the server for the run result, then plays it: your character flies down the lane in a
 	  flying-kick pose, every wall it can break shatters into stud chunks (locally), the camera
 	  follows, a distance counter ticks up and biome banners pop as you enter each biome.

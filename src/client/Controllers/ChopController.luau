@@ -1,6 +1,6 @@
 --[[
 	ChopController.luau
-	Training input. Click / tap the world, press F or R2, or hit the CHOP! button. Each chop plays
+	Training input. Click / tap the world or press F / R2. Each chop plays
 	the karate-chop animation, slash trail and sound immediately and asks the server to credit it.
 	Idle training at a dummy (TrainingController) arrives here as idle ChopResults.
 	The Auto Chop game pass chops for you while it's toggled on.
