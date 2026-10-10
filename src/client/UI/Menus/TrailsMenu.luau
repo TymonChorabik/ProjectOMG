@@ -1,6 +1,7 @@
 --[[
 	TrailsMenu.luau
-	Trails bought with Wins: a coloured trail behind you plus extra walk speed.
+	Trails bought with Wins (a coloured trail behind you plus extra walk speed), as studded
+	tiles in the trail's own colours.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,39 +17,66 @@ local Theme = require(script.Parent.Parent.Theme)
 
 local TrailsMenu = {}
 
+local TILE = Vector2.new(140, 158)
 local REFRESH_KEYS = { Wins = true, OwnedTrails = true, EquippedTrail = true }
 
-function TrailsMenu.new(parent: Instance, ctx: { [string]: any })
-	local window = MenuWindow.new({ Title = "Trails", Icon = "✨", Color = Theme.Colors.Purple, Parent = parent })
+-- Trail preview: a streak in the trail's colours with the speed bonus on top.
+local function streak(art: Frame, trail)
+	local bar = Create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -6, 0, 30),
+		Rotation = -14,
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		ZIndex = 4,
+		Parent = art,
+	}, { Create.Corner(UDim.new(1, 0)), Create.Stroke(3) })
+	Create("UIGradient", {
+		Color = if trail.Rainbow then Theme.Rainbow else ColorSequence.new(trail.Colors[1], trail.Colors[2]),
+		Parent = bar,
+	})
+	Create.Label({
+		Text = `+{trail.Speed} SPEED`,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 1),
+		Size = UDim2.new(1, 0, 0, 22),
+		StrokeThickness = 2.5,
+		ZIndex = 5,
+		Parent = art,
+	})
+end
 
-	local noneCard = MenuWindow.Card(window.Content, 0, 76)
-	noneCard.Swatch.BackgroundColor3 = Theme.Colors.GrayDark
-	noneCard.Title.Text = "No Trail"
-	noneCard.Subtitle.Text = `Walk speed {Config.BaseWalkSpeed}`
-	noneCard.Info.Text = ""
-	noneCard.Button.Activated:Connect(function()
+function TrailsMenu.new(parent: Instance, ctx: { [string]: any })
+	local window = MenuWindow.new({ Title = "Trails", Icon = "☄️", Parent = parent })
+	local grid = MenuWindow.Grid(window.Content, 1, TILE)
+
+	local noneTile = MenuWindow.Tile({
+		Parent = grid,
+		Order = 0,
+		Color = Theme.Colors.GrayDark,
+		Title = "NO TRAIL",
+		Icon = "🚫",
+		Bar = "",
+	})
+	noneTile.Activated:Connect(function()
 		ctx.Request("EquipTrail", "None")
 	end)
 
-	local cards = {}
+	local tiles = {}
 	for order, trail in Config.Trails do
-		local card = MenuWindow.Card(window.Content, order, 76)
-		card.Swatch.BackgroundColor3 = Color3.new(1, 1, 1)
-		local gradient = if trail.Rainbow
-			then ColorSequence.new({
-				ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 60, 60)),
-				ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 220, 60)),
-				ColorSequenceKeypoint.new(0.66, Color3.fromRGB(80, 220, 120)),
-				ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 120, 255)),
-			})
-			else ColorSequence.new(trail.Colors[1], trail.Colors[2])
-		Create("UIGradient", { Color = gradient, Rotation = 45, Parent = card.Swatch })
-		card.Title.Text = trail.Name
-		card.Subtitle.Text = `+{trail.Speed} walk speed`
-		card.Button.Activated:Connect(function()
+		local tile = MenuWindow.Tile({
+			Parent = grid,
+			Order = order,
+			Color = trail.Colors[2],
+			Rainbow = trail.Rainbow,
+			Title = string.upper(trail.Name),
+			Bar = "",
+		})
+		streak(tile.Art, trail)
+		tile.Activated:Connect(function()
 			ctx.Request("BuyTrail", trail.Id)
 		end)
-		cards[order] = card
+		tiles[order] = tile
 	end
 
 	local function refresh()
@@ -57,25 +85,23 @@ function TrailsMenu.new(parent: Instance, ctx: { [string]: any })
 			return
 		end
 		local none = data.EquippedTrail == "None"
-		noneCard.Button:SetText(if none then "EQUIPPED" else "UNEQUIP")
-		noneCard.Button:SetColor(if none then Theme.Colors.Gray else Theme.Colors.Blue)
-		noneCard.Button:SetEnabled(not none)
+		noneTile.BarText.Text = if none then "EQUIPPED" else "UNEQUIP"
+		noneTile.Bar.BackgroundColor3 = if none then Theme.Colors.GreenDark else Theme.Colors.BlueDark
+		noneTile.Corner.Text = if none then "✅" else ""
 		for order, trail in Config.Trails do
-			local card = cards[order]
+			local tile = tiles[order]
 			local owned = data.OwnedTrails[trail.Id] == true
-			card.Info.Text = if owned then "Owned" else `Costs {NumberFormat.Abbreviate(trail.Cost)} Wins`
-			if owned and data.EquippedTrail == trail.Id then
-				card.Button:SetText("EQUIPPED")
-				card.Button:SetColor(Theme.Colors.Gray)
-				card.Button:SetEnabled(false)
+			local equipped = owned and data.EquippedTrail == trail.Id
+			tile.Corner.Text = if equipped then "✅" else ""
+			if equipped then
+				tile.BarText.Text = "EQUIPPED"
+				tile.Bar.BackgroundColor3 = Theme.Colors.GreenDark
 			elseif owned then
-				card.Button:SetText("EQUIP")
-				card.Button:SetColor(Theme.Colors.Blue)
-				card.Button:SetEnabled(true)
+				tile.BarText.Text = "EQUIP"
+				tile.Bar.BackgroundColor3 = Theme.Colors.BlueDark
 			else
-				card.Button:SetText(`🏆 {NumberFormat.Abbreviate(trail.Cost)}`)
-				card.Button:SetColor(if data.Wins >= trail.Cost then Theme.Colors.Green else Theme.Colors.GrayDark)
-				card.Button:SetEnabled(true)
+				tile.BarText.Text = `🏆 {NumberFormat.Abbreviate(trail.Cost)}`
+				tile.Bar.BackgroundColor3 = if data.Wins >= trail.Cost then Theme.Colors.Green else Theme.Colors.Red
 			end
 		end
 	end

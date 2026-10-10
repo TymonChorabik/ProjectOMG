@@ -191,14 +191,7 @@ function UIController.Start()
 	local function refreshAutoChop()
 		local data = ClientData.Data
 		local owned = data ~= nil and Formulas.HasPass(data, "AutoChop")
-		if owned then
-			local on = ChopController.IsAutoChop()
-			hud.AutoChopButton:SetText(if on then "🤖 AUTO CHOP: ON" else "🤖 AUTO CHOP: OFF")
-			hud.AutoChopButton:SetColor(if on then Theme.Colors.Green else Theme.Colors.GrayDark)
-		else
-			hud.AutoChopButton:SetText(`🤖 AUTO CHOP\nONLY R${Config.Monetization.GamePasses.AutoChop.Price}`)
-			hud.AutoChopButton:SetColor(Theme.Colors.Red)
-		end
+		Hud.SetAutoChop(hud, owned, ChopController.IsAutoChop())
 	end
 	ChopController.AutoChopChanged:Connect(refreshAutoChop)
 
@@ -230,7 +223,7 @@ function UIController.Start()
 		local friendBoost = localPlayer:GetAttribute("FriendBoost")
 		friendBoost = if type(friendBoost) == "number" then friendBoost else 0
 
-		hud.StrengthLabel.Text = `⚡ {NumberFormat.Abbreviate(data.Strength)} STRENGTH`
+		hud.StrengthLabel.Text = `{NumberFormat.Abbreviate(data.Strength)} STRENGTH`
 		if data.Strength > lastStrength then
 			Hud.Pulse(hud.StrengthLabel)
 		end
@@ -240,10 +233,13 @@ function UIController.Start()
 
 		local level, _, nextAt = Formulas.GetLevel(data.Strength, data.Rebirths)
 		local maxed = level >= Config.Rebirth.MaxLevel
-		hud.LevelLabel.Text = `Level {level}`
-		hud.LevelRightLabel.Text = if maxed then "MAX LEVEL" else `Next: ⚡{NumberFormat.Abbreviate(nextAt)}`
-		hud.LevelFill.Size = UDim2.fromScale(Formulas.GetRebirthProgress(data), 1)
-		hud.LevelFill.BackgroundColor3 = if maxed then Color3.fromRGB(80, 230, 110) else Color3.fromRGB(60, 200, 255)
+		Hud.SetLevel(
+			hud,
+			level,
+			Formulas.GetRebirthProgress(data),
+			if maxed then "MAX LEVEL" else `Next: ⚡{NumberFormat.Abbreviate(nextAt)}`,
+			maxed
+		)
 
 		local percent = math.floor(Formulas.GetRebirthProgress(data) * 100)
 		hud.Buttons.Rebirth:SetTag(`{percent}%`)

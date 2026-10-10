@@ -39,12 +39,13 @@ local function mount(parent: GuiObject, model: Model, distance: number, height: 
 	return viewport
 end
 
-function ViewportPreview.Pet(parent: GuiObject, petId: string): ViewportFrame
-	return mount(parent, PetModels.Build(petId), 6.5, 1.8)
+-- zoom > 1 frames the model tighter (small tiles).
+function ViewportPreview.Pet(parent: GuiObject, petId: string, zoom: number?): ViewportFrame
+	return mount(parent, PetModels.Build(petId), 6.5 / (zoom or 1), 1.8 / (zoom or 1))
 end
 
-function ViewportPreview.Item(parent: GuiObject, item): ViewportFrame
-	return mount(parent, ItemModels.Build(item), 9, 2)
+function ViewportPreview.Item(parent: GuiObject, item, zoom: number?): ViewportFrame
+	return mount(parent, ItemModels.Build(item), 9 / (zoom or 1), 2 / (zoom or 1))
 end
 
 function ViewportPreview.Egg(parent: GuiObject, color: Color3): ViewportFrame

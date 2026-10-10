@@ -23,6 +23,14 @@ One big studded hub, laid out like *+1 Stone Skipping*:
 
 <sub>Flat-shaded previews of `Workspace.Map` (rendered by `tools/mapgen/render_preview.py`). In Studio you see the real map with studs, lighting and effects.</sub>
 
+| HUD | Playtime Rewards | Shop |
+|---|---|---|
+| ![HUD](docs/ui/hud.png) | ![Gifts](docs/ui/gifts.png) | ![Shop](docs/ui/shop.png) |
+| **Pets** | **Rebirth** | **Welcome Back** |
+| ![Pets](docs/ui/pets.png) | ![Rebirth](docs/ui/rebirth.png) | ![Welcome back](docs/ui/welcomeback.png) |
+
+<sub>The real UI code rendered offline by `tools/uipreview/render_ui.py` (an approximation of Roblox's renderer: emoji and 3D pet previews will look slightly different in game).</sub>
+
 ---
 
 ## ▶️ Open it in Roblox Studio
@@ -55,13 +63,14 @@ it at **ReplicatedStorage → Shared → Config**.
 
 ## 🧱 Studs
 
-**The UI already uses the map's studs.** Panels and buttons show a real studded plastic plate
-(the same `SurfaceType.Studs` surface as the map) rendered in a `ViewportFrame`
-(`src/client/UI/StudBackground.luau`). There's nothing to upload.
+**The UI has blocky square studs out of the box**, like +1 Stone Skipping: every button, bar and
+tile gets a continuous grid of small square studs (a soft dark "L" on each), built from plain
+Frames in `src/client/UI/StudBackground.luau`. They take the colour of the surface they sit on
+and run edge to edge. There's nothing to upload.
 
-**Optional: square studs.** Out of the box the parts use Roblox's built-in round studs. For the
-square studs from Stone Skipping and Steal an Egg (the dark "L" bevel on each stud), upload one
-image:
+**Optional: square studs on the map.** Out of the box the map parts use Roblox's built-in round
+studs. For the square studs from Stone Skipping and Steal an Egg (the dark "L" bevel on each
+stud), upload one image:
 
 1. In Studio: **View → Asset Manager → Bulk Import**, and pick `assets/textures/stud_overlay.png`.
 2. In the Asset Manager's *Images* folder, right-click it and choose **Copy Asset ID**.
@@ -152,10 +161,12 @@ src/client/            → StarterPlayerScripts.Client
   Controllers/PetController    everyone's pets following them
   Controllers/WorldController  pedestal / egg / showcase prompts, live signs
   Controllers/UIController     HUD + windows wiring
-  UI/                          StudPanel, StudBackground, ChunkyButton, Hud, Menus/*, HatchOverlay, WelcomeBack
+  UI/                          Theme, StudBackground (square studs), StudPanel, ChunkyButton,
+                               MenuWindow (window + tiles), Hud, Menus/*, HatchOverlay, WelcomeBack
 src/workspace/Map/     the baked hub map
 assets/textures/       stud_overlay.png (upload this), checker_overlay.png, stud_tile.png
-tools/                 stud texture generator, map baker + preview renderer
+tools/                 stud texture generator, map baker + preview renderer,
+                       uipreview/ (renders the UI offline; bundled OFL/Apache fonts)
 tests/                 offline Luau unit tests for the game math
 ```
 
@@ -171,5 +182,6 @@ rojo serve                         # live-sync into Studio (Rojo plugin → Conn
 rojo build -o KungFuChop.rbxl      # rebuild the place file
 python3 tests/run.py               # unit tests (needs the Luau CLI)
 python3 tools/mapgen/build_map.py  # re-bake Workspace.Map
+python3 tools/uipreview/render_ui.py  # render the UI to docs/ui/*.png (needs Pillow + Luau CLI)
 selene src && stylua src           # lint + format
 ```

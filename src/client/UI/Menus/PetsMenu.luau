@@ -1,7 +1,8 @@
 --[[
 	PetsMenu.luau
-	Pet inventory: equip / unequip, Equip Best, delete mode. Pets show as live 3D previews.
-	The list is rebuilt only when the inventory changes; equip states refresh in place.
+	Pet inventory as a grid of rarity-coloured tiles with live 3D previews and the Strength
+	bonus. Click a tile to equip / unequip it (or delete it in delete mode); Equip Best picks
+	your strongest pets. The grid is rebuilt only when the inventory changes.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,62 +21,76 @@ local ViewportPreview = require(script.Parent.Parent.ViewportPreview)
 
 local PetsMenu = {}
 
+local TILE = Vector2.new(110, 128)
+
 function PetsMenu.new(parent: Instance, ctx: { [string]: any })
-	local window =
-		MenuWindow.new({ Title = "Pets", Icon = "🐾", Color = Color3.fromRGB(255, 160, 60), Parent = parent })
+	local window = MenuWindow.new({ Title = "Pets", Icon = "🐶", Parent = parent })
 	local deleteMode = false
-	local cards: { [string]: any } = {}
+	local tiles: { [string]: any } = {}
+	local bonusTexts: { [string]: string } = {}
 	local listDirty = true
 
-	-- Toolbar.
+	-- Toolbar: summary + Equip Best + Delete.
 	local toolbar = Create("Frame", {
 		Name = "Toolbar",
 		LayoutOrder = 0,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -4, 0, 50),
+		Size = UDim2.new(1, -4, 0, 58),
 		ZIndex = 2,
 		Parent = window.Content,
 	})
 	local summary = Create.Label({
 		Text = "",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -270, 1, -18),
-		Position = UDim2.fromOffset(4, 9),
+		Position = UDim2.fromOffset(4, 6),
+		Size = UDim2.new(1, -330, 0, 26),
+		StrokeThickness = 3,
+		ZIndex = 3,
+		Parent = toolbar,
+	})
+	local subSummary = Create.Label({
+		Text = "",
+		TextColor3 = Theme.Colors.Gold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(4, 34),
+		Size = UDim2.new(1, -330, 0, 20),
+		StrokeThickness = 2.5,
 		ZIndex = 3,
 		Parent = toolbar,
 	})
 	local bestButton = ChunkyButton.new({
 		Text = "EQUIP BEST",
 		Color = Theme.Colors.Blue,
-		Font = Theme.Fonts.Title,
-		Size = UDim2.fromOffset(122, 44),
+		Size = UDim2.fromOffset(160, 54),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -134, 0, 2),
-		MaxTextSize = 17,
+		Position = UDim2.new(1, -164, 0, 2),
+		MaxTextSize = 22,
 		Parent = toolbar,
 	})
 	bestButton.Activated:Connect(function()
 		ctx.Request("EquipBestPets")
 	end)
 	local deleteButton = ChunkyButton.new({
-		Text = "🗑 DELETE",
+		Text = "DELETE",
+		Icon = "🗑️",
 		Color = Theme.Colors.GrayDark,
-		Font = Theme.Fonts.Title,
-		Size = UDim2.fromOffset(122, 44),
+		Size = UDim2.fromOffset(150, 54),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -6, 0, 2),
-		MaxTextSize = 17,
+		Position = UDim2.new(1, -4, 0, 2),
+		MaxTextSize = 22,
 		Parent = toolbar,
 	})
 
 	local emptyLabel = Create.Label({
 		Text = "No pets yet! Hatch eggs behind spawn with your Wins.",
 		LayoutOrder = 1,
-		Size = UDim2.new(1, -4, 0, 30),
+		Size = UDim2.new(1, -4, 0, 34),
+		StrokeThickness = 3,
 		ZIndex = 2,
 		Visible = false,
 		Parent = window.Content,
 	})
+	local grid = MenuWindow.Grid(window.Content, 2, TILE)
 
 	local function refreshStates()
 		local data = ClientData.Data
@@ -86,50 +101,52 @@ function PetsMenu.new(parent: Instance, ctx: { [string]: any })
 		for _ in data.Pets do
 			count += 1
 		end
-		local multiplier = NumberFormat.Multiplier(1 + Formulas.GetEquippedPetBonus(data))
-		summary.Text =
-			`Equipped {#data.EquippedPets}/{Formulas.GetPetSlots(data)}  •  Pets {multiplier}  •  {count}/{Config.PetsConfig.MaxInventory}`
+		summary.Text = `Equipped {#data.EquippedPets}/{Formulas.GetPetSlots(data)}`
+		subSummary.Text =
+			`{NumberFormat.Multiplier(1 + Formulas.GetEquippedPetBonus(data))} Strength  •  {count}/{Config.PetsConfig.MaxInventory} pets`
 		emptyLabel.Visible = count == 0
 		deleteButton:SetColor(if deleteMode then Theme.Colors.Red else Theme.Colors.GrayDark)
 
-		for uid, card in cards do
+		for uid, tile in tiles do
 			local equipped = table.find(data.EquippedPets, uid) ~= nil
+			tile.Corner.Text = if equipped then "✅" else ""
 			if deleteMode then
-				card.Button:SetText("DELETE")
-				card.Button:SetColor(Theme.Colors.Red)
-			elseif equipped then
-				card.Button:SetText("UNEQUIP")
-				card.Button:SetColor(Theme.Colors.Gray)
+				tile.BarText.Text = "DELETE"
+				tile.Bar.BackgroundColor3 = Theme.Colors.Red
 			else
-				card.Button:SetText("EQUIP")
-				card.Button:SetColor(Theme.Colors.Green)
+				tile.BarText.Text = bonusTexts[uid] or ""
+				tile.Bar.BackgroundColor3 = if equipped then Theme.Colors.Green else Color3.fromRGB(40, 40, 48)
 			end
-			card.Frame.BackgroundColor3 = if equipped then Color3.fromRGB(70, 110, 60) else Theme.Colors.Card
 		end
 	end
 
 	local function rebuild()
 		listDirty = false
-		for _, card in cards do
-			card.Frame:Destroy()
+		for _, tile in tiles do
+			tile.Button.Instance:Destroy()
 		end
-		table.clear(cards)
+		table.clear(tiles)
+		table.clear(bonusTexts)
 		local data = ClientData.Data
 		if not data then
 			return
 		end
-		local uids = Formulas.GetBestPetUids(data, math.huge)
-		for order, uid in uids do
+		for order, uid in Formulas.GetBestPetUids(data, math.huge) do
 			local petId = data.Pets[uid]
 			local def = Config.Pets[petId]
-			local card = MenuWindow.Card(window.Content, 10 + order, 76)
-			card.Swatch.BackgroundColor3 = Color3.fromRGB(225, 240, 255)
-			ViewportPreview.Pet(card.Swatch, petId)
-			card.Title.Text = def.Name
-			card.Title.TextColor3 = Config.Rarities[def.Rarity].Color
-			card.Subtitle.Text = def.Rarity
-			card.Info.Text = `+{NumberFormat.Percent(Formulas.GetPetBonus(data, petId))} Strength`
-			card.Button.Activated:Connect(function()
+			local rarity = Config.Rarities[def.Rarity]
+			local tile = MenuWindow.Tile({
+				Parent = grid,
+				Order = order,
+				Color = rarity.Color,
+				Rainbow = def.Rarity == "Secret",
+				Studs = false, -- up to 60 pets: keep the instance count down
+				Title = def.Name,
+				Bar = "",
+			})
+			ViewportPreview.Pet(tile.Art, petId, 1.35)
+			bonusTexts[uid] = `+{NumberFormat.Percent(Formulas.GetPetBonus(data, petId))}`
+			tile.Activated:Connect(function()
 				local current = ClientData.Data
 				if not current then
 					return
@@ -142,7 +159,7 @@ function PetsMenu.new(parent: Instance, ctx: { [string]: any })
 					ctx.Request("EquipPet", uid)
 				end
 			end)
-			cards[uid] = card
+			tiles[uid] = tile
 		end
 		refreshStates()
 	end

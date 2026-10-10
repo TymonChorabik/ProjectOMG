@@ -1,6 +1,8 @@
 --[[
 	WelcomeBack.luau
-	"Welcome Back! You trained while you were offline" popup with Claim and x3 (Robux) options.
+	"Welcome Back! You trained while you were offline" popup (as in +1 Stone Skipping): dark
+	translucent card, outlined title with a clock icon, the offline Strength in gold, a rainbow
+	x3 (Robux) button and a green Claim! button.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,33 +14,41 @@ local NumberFormat = require(Shared.NumberFormat)
 
 local ChunkyButton = require(script.Parent.ChunkyButton)
 local Create = require(script.Parent.Create)
-local StudPanel = require(script.Parent.StudPanel)
 local Theme = require(script.Parent.Theme)
 
 local WelcomeBack = {}
 
 -- onClaim(multiplied: boolean) is called when a button is pressed; the popup closes itself.
 function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onClaim: (boolean) -> ())
-	local panel = StudPanel.new({
+	local panel = Create("Frame", {
 		Name = "WelcomeBack",
-		Size = UDim2.fromOffset(430, 300),
+		Size = UDim2.fromOffset(620, 440),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Color = Color3.fromRGB(70, 70, 80),
-		Transparency = 0.1,
-		StrokeThickness = 4,
+		BackgroundColor3 = Theme.Colors.Window,
+		BackgroundTransparency = Theme.WindowTransparency,
+		BorderSizePixel = 0,
+		ZIndex = 20,
 		Parent = parent,
-	})
-	panel.ZIndex = 20
+	}, { Create.Corner(UDim.new(0, 18)), Create.Stroke(3.5) })
 	local scale = Create("UIScale", { Scale = 0.5, Parent = panel })
 
-	Create.Label({
-		Text = "⏰ Welcome Back!",
-		Font = Theme.Fonts.Title,
+	Create.Icon({
+		Text = "⏰",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = UDim2.new(1, 0, 0, 52),
+		Position = UDim2.fromOffset(40, 6),
+		Size = UDim2.fromOffset(96, 96),
+		Rotation = -10,
+		ZIndex = 22,
+		Parent = panel,
+	})
+	Create.Label({
+		Text = "Welcome Back!",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 30, 0, 4),
+		Size = UDim2.new(1, -120, 0, 70),
 		StrokeThickness = 5,
+		MaxTextSize = 60,
 		ZIndex = 21,
 		Parent = panel,
 	})
@@ -46,26 +56,46 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 	local minutes = math.floor(seconds / 60) % 60
 	Create.Label({
 		Text = `You trained while you were offline ({hours}h {minutes}m):`,
-		Position = UDim2.fromOffset(16, 34),
-		Size = UDim2.new(1, -32, 0, 22),
+		Position = UDim2.fromOffset(24, 50),
+		Size = UDim2.new(1, -48, 0, 30),
+		StrokeThickness = 3,
 		ZIndex = 21,
 		Parent = panel,
 	})
-	Create.Label({
+
+	-- Sunburst behind the bolt: thin rays that fade out towards their tips.
+	local rayFade = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.5, 0.35),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	for index = 0, 9 do
+		Create("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0, 172),
+			Size = UDim2.fromOffset(14, 230),
+			Rotation = index * 18,
+			BackgroundColor3 = Color3.fromRGB(255, 240, 190),
+			BorderSizePixel = 0,
+			ZIndex = 21,
+			Parent = panel,
+		}, { Create("UIGradient", { Transparency = rayFade, Rotation = 90 }) })
+	end
+	Create.Icon({
 		Text = "⚡",
-		Stroke = false,
-		Position = UDim2.new(0.5, -42, 0, 62),
-		Size = UDim2.fromOffset(84, 84),
-		ZIndex = 21,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0, 170),
+		Size = UDim2.fromOffset(140, 140),
+		Rotation = 12,
+		ZIndex = 22,
 		Parent = panel,
 	})
 	Create.Label({
 		Text = `+{NumberFormat.Commas(amount)} STRENGTH`,
-		Font = Theme.Fonts.Title,
-		TextColor3 = Theme.Colors.Yellow,
-		Position = UDim2.fromOffset(16, 152),
-		Size = UDim2.new(1, -32, 0, 38),
-		StrokeThickness = 4,
+		TextColor3 = Theme.Colors.Gold,
+		Position = UDim2.fromOffset(24, 250),
+		Size = UDim2.new(1, -48, 0, 52),
+		StrokeThickness = 4.5,
 		ZIndex = 21,
 		Parent = panel,
 	})
@@ -80,22 +110,36 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 
 	local multiplier = Config.Offline.ProductMultiplier
 	local triple = ChunkyButton.new({
-		Text = `x{multiplier} +{NumberFormat.Abbreviate(amount * multiplier)}  R${Config.Monetization.Products.OfflineTriple.Price}`,
-		Color = Color3.fromRGB(170, 70, 255),
-		Font = Theme.Fonts.Title,
-		Size = UDim2.fromOffset(230, 56),
-		Position = UDim2.new(0, 16, 1, -76),
-		MaxTextSize = 20,
+		Text = `+{NumberFormat.Commas(amount * multiplier)}`,
+		Rainbow = true,
+		Size = UDim2.fromOffset(290, 86),
+		Position = UDim2.new(0, 34, 1, -110),
+		MaxTextSize = 40,
+		StrokeThickness = 4,
 		Parent = panel,
 	})
-	Create("UIGradient", {
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 90, 90)),
-			ColorSequenceKeypoint.new(0.35, Color3.fromRGB(255, 220, 60)),
-			ColorSequenceKeypoint.new(0.7, Color3.fromRGB(80, 220, 120)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 140, 255)),
-		}),
-		Parent = triple.Face,
+	triple.Instance.ZIndex = 21
+	Create.Label({
+		Text = `R${Config.Monetization.Products.OfflineTriple.Price}`,
+		TextColor3 = Theme.Colors.GreenText,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 10, 0, 2),
+		Size = UDim2.fromOffset(90, 32),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		StrokeThickness = 3,
+		ZIndex = 30,
+		Parent = triple.Instance,
+	})
+	Create.Label({
+		Text = `x{multiplier}`,
+		TextColor3 = Theme.Colors.Gold,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, -10, 0, 2),
+		Size = UDim2.fromOffset(60, 34),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		StrokeThickness = 3,
+		ZIndex = 30,
+		Parent = triple.Instance,
 	})
 	triple.Activated:Connect(function()
 		onClaim(true)
@@ -105,13 +149,14 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 	local claim = ChunkyButton.new({
 		Text = "Claim!",
 		Color = Theme.Colors.Green,
-		Font = Theme.Fonts.Title,
-		Size = UDim2.fromOffset(150, 56),
+		Size = UDim2.fromOffset(220, 86),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -16, 1, -76),
-		MaxTextSize = 24,
+		Position = UDim2.new(1, -34, 1, -110),
+		MaxTextSize = 42,
+		StrokeThickness = 4,
 		Parent = panel,
 	})
+	claim.Instance.ZIndex = 21
 	claim.Activated:Connect(function()
 		onClaim(false)
 		close()

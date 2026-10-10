@@ -1,6 +1,8 @@
 --[[
 	GiftsMenu.luau
-	Playtime rewards grid: each gift unlocks after N minutes in this session.
+	Playtime rewards: a 4x3 grid of studded tiles (blue, purple, orange rows, rainbow last
+	gift). Each shows the reward and a red countdown bar; ready gifts say CLAIM!, claimed ones
+	turn dark blue with a big tick.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,13 +13,13 @@ local Formulas = require(Shared.Formulas)
 local NumberFormat = require(Shared.NumberFormat)
 
 local ClientData = require(script.Parent.Parent.Parent.ClientData)
-local Create = require(script.Parent.Parent.Create)
 local MenuWindow = require(script.Parent.Parent.MenuWindow)
+local StudPanel = require(script.Parent.Parent.StudPanel)
 local Theme = require(script.Parent.Parent.Theme)
 
 local GiftsMenu = {}
 
-local ROW_COLORS = { Color3.fromRGB(40, 120, 230), Color3.fromRGB(150, 80, 230), Color3.fromRGB(250, 160, 30) }
+local ROW_COLORS = { Color3.fromRGB(40, 140, 245), Color3.fromRGB(160, 90, 240), Color3.fromRGB(255, 170, 30) }
 local ICONS = { Strength = "⚡", Wins = "🏆", Egg = "🥚", Boost = "🧪" }
 
 local function rewardTitle(reward, data): string
@@ -65,68 +67,37 @@ function GiftsMenu.NextGiftIn(session): number?
 end
 
 function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
-	local window = MenuWindow.new({ Title = "Gifts", Icon = "🎁", Color = Theme.Colors.Green, Parent = parent })
-
-	local grid = Create("Frame", {
-		Name = "Grid",
-		LayoutOrder = 1,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -6, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		ZIndex = 2,
-		Parent = window.Content,
-	}, {
-		Create("UIGridLayout", {
-			CellSize = UDim2.fromOffset(124, 126),
-			CellPadding = UDim2.fromOffset(8, 8),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		}),
+	local window = MenuWindow.new({
+		Title = "Playtime Rewards",
+		Name = "Gifts",
+		Icon = "🎁",
+		Size = Vector2.new(660, 500),
+		Parent = parent,
 	})
+	local grid = MenuWindow.Grid(window.Content, 1, Vector2.new(140, 130))
 
 	local tiles = {}
+	local count = #Config.PlaytimeRewards
 	for index, reward in Config.PlaytimeRewards do
-		local tile = Create("Frame", {
-			LayoutOrder = index,
-			BackgroundColor3 = ROW_COLORS[math.clamp(math.ceil(index / 4), 1, 3)],
-			ZIndex = 3,
+		local rainbow = index == count
+		local tile = MenuWindow.Tile({
 			Parent = grid,
-		}, { Create.Corner(UDim.new(0, 12)), Create.Stroke(3), Create.Bevel(0.25) })
-		local title = Create.Label({
-			Text = "",
-			Position = UDim2.fromOffset(6, 5),
-			Size = UDim2.new(1, -12, 0, 18),
-			ZIndex = 4,
-			Parent = tile,
+			Order = index,
+			Color = ROW_COLORS[math.clamp(math.ceil(index / 4), 1, #ROW_COLORS)],
+			Rainbow = rainbow,
+			Title = "",
+			Icon = ICONS[reward.Kind] or "🎁",
+			Bar = "",
 		})
-		local icon = Create.Label({
-			Text = ICONS[reward.Kind] or "🎁",
-			Stroke = false,
-			Position = UDim2.fromScale(0.2, 0.22),
-			Size = UDim2.fromScale(0.6, 0.48),
-			ZIndex = 4,
-			Parent = tile,
-		})
-		local bar = Create("TextButton", {
-			AutoButtonColor = true,
-			Text = "",
-			BackgroundColor3 = Theme.Colors.Red,
-			Position = UDim2.new(0, 7, 1, -29),
-			Size = UDim2.new(1, -14, 0, 22),
-			ZIndex = 4,
-			Parent = tile,
-		}, { Create.Corner(UDim.new(0, 8)), Create.Stroke(2) })
-		local barText = Create.Label({
-			Text = "",
-			Size = UDim2.new(1, -8, 1, -4),
-			Position = UDim2.fromOffset(4, 2),
-			ZIndex = 5,
-			Parent = bar,
-		})
-		bar.Activated:Connect(function()
+		tile.Activated:Connect(function()
 			ctx.ClaimGift(index)
 		end)
-		tiles[index] = { Tile = tile, Title = title, Icon = icon, Bar = bar, BarText = barText }
+		tiles[index] = {
+			Tile = tile,
+			Color = ROW_COLORS[math.clamp(math.ceil(index / 4), 1, #ROW_COLORS)],
+			Rainbow = rainbow,
+			Claimed = false,
+		}
 	end
 
 	local function refresh()
@@ -134,22 +105,35 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 		local data = ClientData.Data
 		local elapsed = if session then workspace:GetServerTimeNow() - session.SessionStart else 0
 		for index, reward in Config.PlaytimeRewards do
-			local tile = tiles[index]
+			local entry = tiles[index]
+			local tile = entry.Tile
 			tile.Title.Text = rewardTitle(reward, data)
-			local claimed = session and session.Claimed[index]
+			local claimed = session ~= nil and session.Claimed[index] == true
 			local remaining = reward.Minutes * 60 - elapsed
+			if claimed ~= entry.Claimed then
+				entry.Claimed = claimed
+				if claimed then
+					-- Claimed: dark blue tile with a big tick, like the reference.
+					tile.Button:SetColor(Theme.Colors.Navy)
+				elseif entry.Rainbow then
+					StudPanel.Paint(tile.Face, Color3.new(1, 1, 1), true)
+				else
+					tile.Button:SetColor(entry.Color)
+				end
+			end
 			if claimed then
-				tile.BarText.Text = "✅ CLAIMED"
-				tile.Bar.BackgroundColor3 = Theme.Colors.GrayDark
-				tile.Tile.BackgroundTransparency = 0.5
-			elseif remaining <= 0 then
-				tile.BarText.Text = "CLAIM!"
-				tile.Bar.BackgroundColor3 = Theme.Colors.Green
-				tile.Tile.BackgroundTransparency = 0
+				tile.Icon.Text = "✅"
+				tile.Bar.Visible = false
 			else
-				tile.BarText.Text = formatTime(remaining)
-				tile.Bar.BackgroundColor3 = Theme.Colors.Red
-				tile.Tile.BackgroundTransparency = 0
+				tile.Icon.Text = ICONS[reward.Kind] or "🎁"
+				tile.Bar.Visible = true
+				if remaining <= 0 then
+					tile.BarText.Text = "CLAIM!"
+					tile.Bar.BackgroundColor3 = Theme.Colors.Green
+				else
+					tile.BarText.Text = formatTime(remaining)
+					tile.Bar.BackgroundColor3 = Theme.Colors.Red
+				end
 			end
 		end
 	end
@@ -164,6 +148,7 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 	end)
 	window.Instance:GetPropertyChangedSignal("Visible"):Connect(refresh)
 	window.Refresh = refresh
+	refresh()
 	return window
 end
 

@@ -1,13 +1,16 @@
 --[[
 	StudBackground.luau
-	Studded plastic backgrounds for UI panels and buttons — the same studs as the map.
+	Blocky square studs for UI surfaces, like +1 Stone Skipping: a grid of small square studs,
+	each drawn as a soft dark "L" (left + bottom edge) over the surface's own colour, so the
+	studs pick up whatever colour/gradient the button or panel has.
 
-	Default: a ViewportFrame looking straight down at a real Plastic part with SurfaceType.Studs,
-	coloured like the panel. It renders through the same engine path as the map, so the UI studs
-	match the world exactly and no image upload is needed. The part is resized to the panel so
-	every stud stays STUD_PIXELS wide on screen.
+	The grid is continuous like a real plate: it starts under the top-left edge, runs off every
+	side and is trimmed to the rounded outline, so the border cuts studs on all four sides.
+	Built from plain Frames: nothing to upload. Studs keep a fixed size (STUD px at 1080p,
+	scaled with the rest of the UI) and the grid is only rebuilt when the surface's unscaled
+	size changes (not during open/close scale tweens).
 
-	With Config.Assets.StudTexture set (uploaded tile), it instead follows the classic spec:
+	With Config.Assets.StudTexture set (an uploaded tile), it instead follows the classic spec:
 		ImageLabel inside the panel, Image = the stud texture, ScaleType = Enum.ScaleType.Tile,
 		TileSize = UDim2.new(0, 32, 0, 32)  (Config.Assets.StudTileSize)
 ]]
@@ -20,13 +23,15 @@ local Create = require(script.Parent.Create)
 local StudBackground = {}
 
 local BACKGROUND_NAME = "StudBackground"
-local STUD_PIXELS = 18 -- on-screen width of one stud
-local CAMERA_FOV = 5 -- narrow FOV ≈ orthographic, so studs stay square across the panel
+local STUD = 11 -- stud size
+local GAP = 5 -- space between studs
+local EDGE = 2 -- thickness of the dark "L"
+local PHASE = -4 -- the grid starts under the top-left edge, so edge studs are cut
+local PITCH = STUD + GAP
 
 export type Options = {
-	Color: Color3?, -- plastic colour (viewport mode)
 	Tint: Color3?, -- ImageColor3 (texture mode)
-	Transparency: number?, -- ImageTransparency (texture mode)
+	Transparency: number?, -- strength of the stud edges (0 = black, 1 = invisible)
 	CornerRadius: UDim?,
 }
 
@@ -39,7 +44,7 @@ local function buildImage(parent: GuiObject, options: Options?): ImageLabel
 		ScaleType = Enum.ScaleType.Tile,
 		TileSize = Config.Assets.StudTileSize, -- UDim2.new(0, 32, 0, 32)
 		ImageColor3 = (options and options.Tint) or Color3.new(1, 1, 1),
-		ImageTransparency = (options and options.Transparency) or Config.Assets.StudImageTransparency,
+		ImageTransparency = Config.Assets.StudImageTransparency,
 		ZIndex = 0,
 		Parent = parent,
 	}, {
@@ -47,55 +52,122 @@ local function buildImage(parent: GuiObject, options: Options?): ImageLabel
 	})
 end
 
-local function buildViewport(parent: GuiObject, options: Options?): ViewportFrame
-	local viewport = Create("ViewportFrame", {
+-- Product of every UIScale from `gui` up to its ScreenGui: AbsoluteSize / this = design size.
+local function cumulativeScale(gui: Instance): number
+	local scale = 1
+	local current: Instance? = gui
+	while current and not current:IsA("LayerCollector") do
+		local uiScale = current:FindFirstChildOfClass("UIScale")
+		if uiScale and uiScale.Scale > 0 then
+			scale *= uiScale.Scale
+		end
+		current = current.Parent
+	end
+	return scale
+end
+
+-- The dark "L" bars of every stud on a `width` x `height` surface with rounded corners of
+-- `radius`, as rectangles {X, Y, W, H}. The grid is one continuous plate: it starts under the
+-- top-left edge and runs off every side, and each bar is trimmed to the rounded outline, so
+-- studs are cut by the border exactly like a window onto a studded sheet.
+function StudBackground.Layout(width: number, height: number, radius: number): { { number } }
+	local reach = radius + 1 -- the outline covers a pixel past the curve
+
+	-- Allowed range across the surface at position `u` along an axis of `length`.
+	local function span(u: number, length: number, across: number): (number, number)
+		local d = if u < radius then radius - u elseif u > length - radius then u - (length - radius) else 0
+		if d <= 0 then
+			return 0, across
+		end
+		local inset = radius - math.sqrt(math.max(0, reach * reach - d * d))
+		return inset, across - inset
+	end
+
+	local bars = {}
+	local function vertical(x0: number, x1: number, y0: number, y1: number)
+		x0, x1 = math.max(x0, 0), math.min(x1, width)
+		if x1 - x0 < 1 then
+			return
+		end
+		local lo, hi = span((x0 + x1) / 2, width, height)
+		y0, y1 = math.max(y0, lo), math.min(y1, hi)
+		if y1 - y0 >= 1 then
+			table.insert(bars, { x0, y0, x1 - x0, y1 - y0 })
+		end
+	end
+	local function horizontal(x0: number, x1: number, y0: number, y1: number)
+		y0, y1 = math.max(y0, 0), math.min(y1, height)
+		if y1 - y0 < 1 then
+			return
+		end
+		local lo, hi = span((y0 + y1) / 2, height, width)
+		x0, x1 = math.max(x0, lo), math.min(x1, hi)
+		if x1 - x0 >= 1 then
+			table.insert(bars, { x0, y0, x1 - x0, y1 - y0 })
+		end
+	end
+
+	local cols = math.ceil((width - PHASE) / PITCH)
+	local rows = math.ceil((height - PHASE) / PITCH)
+	for row = 0, rows - 1 do
+		for col = 0, cols - 1 do
+			local x, y = PHASE + col * PITCH, PHASE + row * PITCH
+			vertical(x, x + EDGE, y, y + STUD)
+			horizontal(x + EDGE, x + STUD, y + STUD - EDGE, y + STUD)
+		end
+	end
+	return bars
+end
+
+local function buildStuds(parent: GuiObject, options: Options?): Frame
+	local holder = Create("Frame", {
 		Name = BACKGROUND_NAME,
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
-		-- Tuned so a lit top face renders close to the part's own colour.
-		Ambient = Color3.fromRGB(125, 125, 125),
-		LightColor = Color3.fromRGB(150, 150, 150),
-		LightDirection = Vector3.new(-0.35, -1, -0.25),
 		ZIndex = 0,
 		Parent = parent,
-	}, {
-		Create.Corner(options and options.CornerRadius),
 	})
+	local edgeTransparency = (options and options.Transparency) or 0.8
+	local cornerRadius = (options and options.CornerRadius) or UDim.new(0, 12)
+	-- Read by tools/uipreview (which has no AbsoluteSize) to draw the same grid.
+	holder:SetAttribute("StudPitch", PITCH)
+	holder:SetAttribute("StudSize", STUD)
+	holder:SetAttribute("StudEdge", EDGE)
+	holder:SetAttribute("StudPhase", PHASE)
+	holder:SetAttribute("StudTransparency", edgeTransparency)
+	holder:SetAttribute("StudRadiusScale", cornerRadius.Scale)
+	holder:SetAttribute("StudRadiusOffset", cornerRadius.Offset)
+	local builtWidth, builtHeight = -1, -1
 
-	local plate = Instance.new("Part")
-	plate.Name = "Plate"
-	plate.Anchored = true
-	plate.Material = Enum.Material.Plastic
-	plate.Color = (options and options.Color) or Color3.fromRGB(200, 200, 200)
-	plate.TopSurface = Enum.SurfaceType.Studs
-	plate.BottomSurface = Enum.SurfaceType.Smooth
-	plate.Size = Vector3.new(4, 1, 4)
-	plate.CFrame = CFrame.new(0, -0.5, 0)
-	plate.Parent = viewport
-
-	local camera = Instance.new("Camera")
-	camera.FieldOfView = CAMERA_FOV
-	camera.Parent = viewport
-	viewport.CurrentCamera = camera
-
-	local function fit()
-		local size = viewport.AbsoluteSize
-		if size.X < 1 or size.Y < 1 then
+	local function rebuild()
+		local size = holder.AbsoluteSize / cumulativeScale(holder)
+		local width, height = math.round(size.X), math.round(size.Y)
+		if width == builtWidth and height == builtHeight then
 			return
 		end
-		local studsX, studsZ = size.X / STUD_PIXELS, size.Y / STUD_PIXELS
-		-- One spare stud on every side so the plate edge never shows.
-		plate.Size = Vector3.new(math.ceil(studsX) + 2, 1, math.ceil(studsZ) + 2)
-		local distance = (studsZ / 2) / math.tan(math.rad(CAMERA_FOV / 2))
-		camera.CFrame = CFrame.lookAt(Vector3.new(0, distance, 0), Vector3.zero, Vector3.new(0, 0, -1))
-	end
-	viewport:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
-	task.defer(fit)
+		builtWidth, builtHeight = width, height
+		holder:ClearAllChildren()
 
-	return viewport
+		local radius =
+			math.min(cornerRadius.Scale * math.min(width, height) + cornerRadius.Offset, math.min(width, height) / 2)
+		for _, bar in StudBackground.Layout(width, height, radius) do
+			Create("Frame", {
+				BackgroundColor3 = Color3.new(0, 0, 0),
+				BackgroundTransparency = edgeTransparency,
+				BorderSizePixel = 0,
+				Position = UDim2.fromOffset(bar[1], bar[2]),
+				Size = UDim2.fromOffset(bar[3], bar[4]),
+				Parent = holder,
+			})
+		end
+	end
+
+	holder:GetPropertyChangedSignal("AbsoluteSize"):Connect(rebuild)
+	task.defer(rebuild)
+	return holder
 end
 
--- Adds the studded background as the bottom-most child of `parent`.
+-- Adds the studs as the bottom-most child of `parent`.
 function StudBackground.Apply(parent: GuiObject, options: Options?): GuiObject
 	local existing = parent:FindFirstChild(BACKGROUND_NAME)
 	if existing then
@@ -104,16 +176,11 @@ function StudBackground.Apply(parent: GuiObject, options: Options?): GuiObject
 	if Config.Assets.StudTexture ~= "" then
 		return buildImage(parent, options)
 	end
-	return buildViewport(parent, options)
+	return buildStuds(parent, options)
 end
 
--- Recolours the plastic of a background created by Apply (no-op in texture mode).
-function StudBackground.SetColor(parent: GuiObject, color: Color3)
-	local background = parent:FindFirstChild(BACKGROUND_NAME)
-	local plate = background and background:FindFirstChild("Plate")
-	if plate and plate:IsA("BasePart") then
-		plate.Color = color
-	end
-end
+-- Kept for callers from the plastic-viewport era: the studs now take the surface colour
+-- automatically, so there is nothing to recolour.
+function StudBackground.SetColor(_parent: GuiObject, _color: Color3) end
 
 return StudBackground

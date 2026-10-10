@@ -1,7 +1,8 @@
 --[[
 	InventoryMenu.luau
-	Hand items (wraps → gauntlets): unlocked by lifetime Wins, equip any unlocked one.
-	The Phoenix Relic game pass is always 125% better than your best unlocked item.
+	Hand items (wraps → gauntlets) as studded tiles with 3D previews: unlocked by lifetime Wins,
+	click any unlocked one to equip it. The Phoenix Relic game pass (rainbow tile) is always
+	125% better than your best unlocked item.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,23 +19,28 @@ local ViewportPreview = require(script.Parent.Parent.ViewportPreview)
 
 local InventoryMenu = {}
 
+local TILE = Vector2.new(110, 136)
 local REFRESH_KEYS = { TotalWins = true, EquippedItem = true, Passes = true }
 
 function InventoryMenu.new(parent: Instance, ctx: { [string]: any })
-	local window =
-		MenuWindow.new({ Title = "Inventory", Icon = "🎒", Color = Color3.fromRGB(200, 140, 80), Parent = parent })
+	local window = MenuWindow.new({ Title = "Inventory", Icon = "🎒", Parent = parent })
 	local entries = {}
 
 	local items = table.clone(Config.HandItems)
-	table.insert(items, Config.PremiumItem)
+	table.insert(items, 1, Config.PremiumItem)
 
+	local grid = MenuWindow.Grid(window.Content, 1, TILE)
 	for order, item in items do
-		local card = MenuWindow.Card(window.Content, order, 76)
-		card.Swatch.BackgroundColor3 = Color3.fromRGB(220, 235, 250)
-		ViewportPreview.Item(card.Swatch, item)
-		card.Title.Text = item.Name
-		card.Title.TextColor3 = if item.Pass then Color3.fromRGB(255, 170, 60) else Theme.Colors.White
-		card.Button.Activated:Connect(function()
+		local tile = MenuWindow.Tile({
+			Parent = grid,
+			Order = order,
+			Color = Theme.Colors.Blue,
+			Rainbow = item.Pass ~= nil,
+			Title = "",
+			Bar = "",
+		})
+		ViewportPreview.Item(tile.Art, item, 1.3)
+		tile.Activated:Connect(function()
 			local data = ClientData.Data
 			if item.Pass and data and not Formulas.HasPass(data, item.Pass) then
 				ctx.Purchase("pass:" .. item.Pass)
@@ -42,7 +48,7 @@ function InventoryMenu.new(parent: Instance, ctx: { [string]: any })
 				ctx.Request("EquipItem", item.Id)
 			end
 		end)
-		table.insert(entries, { Item = item, Card = card })
+		table.insert(entries, { Item = item, Tile = tile })
 	end
 
 	local function refresh()
@@ -52,34 +58,30 @@ function InventoryMenu.new(parent: Instance, ctx: { [string]: any })
 		end
 		local best = Formulas.GetBestUnlockedItem(data)
 		for _, entry in entries do
-			local item, card = entry.Item, entry.Card
+			local item, tile = entry.Item, entry.Tile
 			local unlocked = Formulas.IsItemUnlocked(data, item.Id)
+			local equipped = unlocked and data.EquippedItem == item.Id
 			local bonus = if item.Pass then best.Bonus * (1 + item.BetterBy) else item.Bonus
-			card.Subtitle.Text = `+{NumberFormat.Abbreviate(bonus)} Strength per chop`
-			if item.Pass then
-				card.Info.Text = "Always 125% better than your best"
-			else
-				card.Info.Text = if item.Wins == 0
-					then "Starter"
-					else `Unlocks at {NumberFormat.Abbreviate(item.Wins)} Wins`
+			tile.Title.Text = `+{NumberFormat.Abbreviate(bonus)}`
+			tile.Corner.Text = if equipped then "✅" else ""
+			if not item.Pass then
+				tile.Button:SetColor(
+					if equipped then Theme.Colors.Green elseif unlocked then Theme.Colors.Blue else Theme.Colors.GrayDark
+				)
 			end
-
-			if data.EquippedItem == item.Id and unlocked then
-				card.Button:SetText("EQUIPPED")
-				card.Button:SetColor(Theme.Colors.Gray)
-				card.Button:SetEnabled(false)
+			tile.Shade.Visible = not unlocked and not item.Pass
+			if equipped then
+				tile.BarText.Text = "EQUIPPED"
+				tile.Bar.BackgroundColor3 = Theme.Colors.GreenDark
 			elseif unlocked then
-				card.Button:SetText("EQUIP")
-				card.Button:SetColor(Theme.Colors.Blue)
-				card.Button:SetEnabled(true)
+				tile.BarText.Text = "EQUIP"
+				tile.Bar.BackgroundColor3 = Theme.Colors.BlueDark
 			elseif item.Pass then
-				card.Button:SetText(`R$ {Config.Monetization.GamePasses[item.Pass].Price}`)
-				card.Button:SetColor(Theme.Colors.Green)
-				card.Button:SetEnabled(true)
+				tile.BarText.Text = `R$ {Config.Monetization.GamePasses[item.Pass].Price}`
+				tile.Bar.BackgroundColor3 = Theme.Colors.Green
 			else
-				card.Button:SetText(`🔒 {NumberFormat.Abbreviate(item.Wins)} WINS`)
-				card.Button:SetColor(Theme.Colors.GrayDark)
-				card.Button:SetEnabled(false)
+				tile.BarText.Text = `🏆 {NumberFormat.Abbreviate(item.Wins)}`
+				tile.Bar.BackgroundColor3 = Theme.Colors.Red
 			end
 		end
 	end

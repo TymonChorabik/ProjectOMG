@@ -9,7 +9,6 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
 local Create = require(script.Parent.Create)
-local StudPanel = require(script.Parent.StudPanel)
 local Theme = require(script.Parent.Theme)
 
 local Popups = {}
@@ -39,8 +38,8 @@ local function getGui(): ScreenGui
 		Name = "Toasts",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 110),
-		Size = UDim2.fromOffset(360, 240),
+		Position = UDim2.new(0.5, 0, 0, 200),
+		Size = UDim2.fromOffset(470, 240),
 		Parent = gui,
 	}, {
 		Create("UIListLayout", {
@@ -54,8 +53,8 @@ local function getGui(): ScreenGui
 		Name = "Banner",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.3),
-		Size = UDim2.fromOffset(460, 96),
+		Position = UDim2.fromScale(0.5, 0.4),
+		Size = UDim2.fromOffset(760, 150),
 		Parent = gui,
 	})
 
@@ -68,7 +67,6 @@ function Popups.ScreenText(screenPosition: Vector2, text: string, color: Color3,
 	local height = size or 26
 	local label = Create.Label({
 		Text = text,
-		Font = Theme.Fonts.Title,
 		TextColor3 = color,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.fromOffset(height * 6, height),
@@ -138,10 +136,10 @@ function Popups.WorldText(position: Vector3, text: string, color: Color3, scale:
 	Debris:AddItem(anchor, 1.2)
 end
 
-local TOAST_COLORS = {
-	Info = Theme.Colors.Panel,
-	Success = Theme.Colors.GreenDark,
-	Error = Theme.Colors.PanelRed,
+local TOAST_TEXT = {
+	Info = Theme.Colors.White,
+	Success = Theme.Colors.GreenText,
+	Error = Color3.fromRGB(255, 110, 110),
 }
 
 function Popups.Toast(message: string, kind: string?)
@@ -161,25 +159,24 @@ function Popups.Toast(message: string, kind: string?)
 		toasts[1]:Destroy()
 	end
 
-	local panel = StudPanel.new({
+	local panel = Create("Frame", {
 		Name = "Toast",
-		Size = UDim2.fromOffset(350, 38),
-		Color = TOAST_COLORS[kind or "Info"] or Theme.Colors.Panel,
-		Transparency = 0.05,
-		CornerRadius = UDim.new(0, 8),
-		StrokeThickness = 2.5,
-		Studs = false,
-	})
+		Size = UDim2.fromOffset(460, 46),
+		BackgroundColor3 = Theme.Colors.Window,
+		BackgroundTransparency = Theme.WindowTransparency,
+		BorderSizePixel = 0,
+	}, { Create.Corner(UDim.new(0, 12)), Create.Stroke(3) })
 	panel.LayoutOrder = math.floor(os.clock() * 1000) % 1_000_000_000
-	local text = Create.Label({
+	Create.Label({
 		Text = message,
-		Size = UDim2.new(1, -20, 1, -10),
-		Position = UDim2.fromOffset(10, 5),
-		StrokeThickness = 2,
+		TextColor3 = TOAST_TEXT[kind or "Info"] or Theme.Colors.White,
+		Size = UDim2.new(1, -24, 1, -14),
+		Position = UDim2.fromOffset(12, 7),
+		StrokeThickness = 2.5,
+		MaxTextSize = 24,
 		ZIndex = 2,
 		Parent = panel,
 	})
-	Create("UITextSizeConstraint", { MaxTextSize = 18, Parent = text })
 	local scale = Create("UIScale", { Scale = 0.6, Parent = panel })
 	panel.Parent = holder
 
@@ -207,17 +204,17 @@ function Popups.Banner(title: string, subtitle: string, color: Color3?)
 
 	local titleLabel = Create.Label({
 		Text = title,
-		Font = Theme.Fonts.Title,
-		TextColor3 = color or Theme.Colors.Yellow,
-		Size = UDim2.fromScale(1, 0.65),
-		StrokeThickness = 4,
+		Font = Enum.Font.FredokaOne,
+		TextColor3 = color or Theme.Colors.Gold,
+		Size = UDim2.fromScale(1, 0.68),
+		StrokeThickness = 5,
 		Parent = holder,
 	})
 	local subtitleLabel = Create.Label({
 		Text = subtitle,
-		Size = UDim2.fromScale(0.7, 0.3),
-		Position = UDim2.fromScale(0.15, 0.68),
-		StrokeThickness = 2.5,
+		Size = UDim2.fromScale(0.8, 0.26),
+		Position = UDim2.fromScale(0.1, 0.72),
+		StrokeThickness = 3,
 		Parent = holder,
 	})
 	local scale = Create("UIScale", { Scale = 1.6, Parent = holder })

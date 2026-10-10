@@ -76,15 +76,17 @@ function Create.Bevel(strength: number?): UIGradient
 	})
 end
 
+-- Outlined cartoon text (white, heavy font, thick black outline). Extra props:
+-- Stroke = false (no outline), StrokeThickness, MaxTextSize.
 function Create.Label(props: { [string]: any }): TextLabel
 	local defaults = {
 		BackgroundTransparency = 1,
-		Font = Theme.Fonts.Body,
+		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.White,
 		TextScaled = true,
 	}
 	for key, value in props do
-		if key ~= "Stroke" and key ~= "StrokeThickness" then
+		if key ~= "Stroke" and key ~= "StrokeThickness" and key ~= "MaxTextSize" then
 			defaults[key] = value
 		end
 	end
@@ -92,7 +94,17 @@ function Create.Label(props: { [string]: any }): TextLabel
 	if props.Stroke ~= false then
 		Create.TextStroke(props.StrokeThickness).Parent = label
 	end
+	if props.MaxTextSize then
+		create("UITextSizeConstraint", { MaxTextSize = props.MaxTextSize, Parent = label })
+	end
 	return label
+end
+
+-- Big emoji "icon" (no outline), centred in its box.
+function Create.Icon(props: { [string]: any }): TextLabel
+	props.Stroke = false
+	props.Font = props.Font or Theme.Fonts.Body
+	return Create.Label(props)
 end
 
 return Create

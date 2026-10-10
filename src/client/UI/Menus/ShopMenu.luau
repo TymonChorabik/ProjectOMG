@@ -1,92 +1,94 @@
 --[[
 	ShopMenu.luau
-	Robux shop: every game pass and developer product from Config.Monetization.
+	Robux shop: every game pass and developer product from Config.Monetization, as studded
+	tiles (name, big icon, green price bar). Owned passes turn grey with a tick.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
-local NumberFormat = require(Shared.NumberFormat)
 
 local ClientData = require(script.Parent.Parent.Parent.ClientData)
-local Create = require(script.Parent.Parent.Create)
 local MenuWindow = require(script.Parent.Parent.MenuWindow)
 local Theme = require(script.Parent.Parent.Theme)
 
 local ShopMenu = {}
 
-local PASS_ORDER = {
-	"AutoChop",
-	"DoubleStrength",
-	"DoubleWins",
-	"PetSlots",
-	"GoldenZone",
-	"DragonZone",
-	"CosmicZone",
-	"PhoenixRelic",
-	"LionKing",
-}
-local PRODUCT_ORDER = { "StarterPack", "Strength10K", "Strength100K", "Strength1M", "RainbowEgg" }
-local PRODUCT_ICONS =
-	{ StarterPack = "🎁", Strength10K = "⚡", Strength100K = "⚡", Strength1M = "⚡", RainbowEgg = "🌈" }
+local TILE = Vector2.new(140, 158)
 
-local function iconSwatch(swatch: Frame, icon: string, color: Color3)
-	swatch.BackgroundColor3 = color
-	Create.Label({
-		Text = icon,
-		Stroke = false,
-		Size = UDim2.fromScale(0.8, 0.8),
-		Position = UDim2.fromScale(0.1, 0.1),
-		ZIndex = 4,
-		Parent = swatch,
-	})
+local PASSES = {
+	{ Name = "AutoChop", Color = Theme.Colors.Red },
+	{ Name = "DoubleStrength", Color = Color3.fromRGB(120, 200, 40) },
+	{ Name = "DoubleWins", Color = Color3.fromRGB(250, 170, 30) },
+	{ Name = "PetSlots", Color = Theme.Colors.Blue },
+	{ Name = "GoldenZone", Color = Color3.fromRGB(240, 190, 30) },
+	{ Name = "DragonZone", Color = Color3.fromRGB(220, 70, 50) },
+	{ Name = "CosmicZone", Color = Theme.Colors.Purple },
+	{ Name = "PhoenixRelic", Color = Color3.fromRGB(255, 120, 40) },
+	{ Name = "LionKing", Rainbow = true },
+}
+local PRODUCTS = {
+	{ Name = "StarterPack", Title = "STARTER PACK", Icon = "🎁", Color = Theme.Colors.Pink },
+	{ Name = "Strength10K", Title = "+10K STRENGTH", Icon = "⚡", Color = Color3.fromRGB(255, 190, 30) },
+	{ Name = "Strength100K", Title = "+100K STRENGTH", Icon = "⚡", Color = Theme.Colors.Red },
+	{ Name = "Strength1M", Title = "+1M STRENGTH", Icon = "⚡", Rainbow = true },
+	{ Name = "RainbowEgg", Title = "RAINBOW EGG", Icon = "🥚", Rainbow = true },
+}
+
+local function price(amount: number): string
+	return `R$ {amount}`
 end
 
 function ShopMenu.new(parent: Instance, ctx: { [string]: any })
-	local window = MenuWindow.new({ Title = "Shop", Icon = "🛒", Color = Theme.Colors.Red, Parent = parent })
+	local window = MenuWindow.new({ Title = "Shop", Icon = "🛒", Parent = parent })
 	local passes, products = Config.Monetization.GamePasses, Config.Monetization.Products
-	local passCards, productCards = {}, {}
+	local passTiles, productTiles = {}, {}
 
-	MenuWindow.Header(window.Content, 0, "⭐ GAME PASSES")
-	for order, name in PASS_ORDER do
-		local pass = passes[name]
-		local card = MenuWindow.Card(window.Content, order, 76)
-		iconSwatch(card.Swatch, pass.Icon, Color3.fromRGB(255, 220, 120))
-		card.Title.Text = pass.Name
-		card.Subtitle.Text = pass.Description
-		card.Info.Text = ""
-		card.Button.Activated:Connect(function()
-			ctx.Purchase("pass:" .. name)
+	MenuWindow.Header(window.Content, 1, "Game Passes")
+	local passGrid = MenuWindow.Grid(window.Content, 2, TILE)
+	for order, entry in PASSES do
+		local pass = passes[entry.Name]
+		local tile = MenuWindow.Tile({
+			Parent = passGrid,
+			Order = order,
+			Color = entry.Color or Theme.Colors.Blue,
+			Rainbow = entry.Rainbow,
+			Title = string.upper(pass.Name),
+			Icon = pass.Icon,
+			Bar = price(pass.Price),
+			BarColor = Theme.Colors.Green,
+		})
+		tile.Activated:Connect(function()
+			ctx.Purchase("pass:" .. entry.Name)
 		end)
-		passCards[name] = card
+		passTiles[entry.Name] = tile
 	end
 
-	MenuWindow.Header(window.Content, 100, "💎 PACKS & BOOSTS")
-	for order, name in PRODUCT_ORDER do
-		local product = products[name]
-		local card = MenuWindow.Card(window.Content, 100 + order, 76)
-		iconSwatch(card.Swatch, PRODUCT_ICONS[name] or "💎", Color3.fromRGB(170, 230, 255))
-		card.Title.Text = product.Name
-		local parts = {}
-		if product.Strength then
-			table.insert(parts, `+{NumberFormat.Abbreviate(product.Strength)} Strength`)
-		end
-		if product.Wins then
-			table.insert(parts, `+{product.Wins} Wins`)
-		end
-		if product.Pet then
-			table.insert(parts, Config.Pets[product.Pet].Name)
-		end
-		if name == "RainbowEgg" then
-			table.insert(parts, "Hatch a Rainbow Egg (best pets!)")
-		end
-		card.Subtitle.Text = table.concat(parts, " • ")
-		card.Info.Text = if product.OneTime then "One-time offer" else ""
-		card.Button.Activated:Connect(function()
-			ctx.Purchase("product:" .. name)
+	MenuWindow.Header(window.Content, 3, "Packs")
+	local productGrid = MenuWindow.Grid(window.Content, 4, TILE)
+	for order, entry in PRODUCTS do
+		local tile = MenuWindow.Tile({
+			Parent = productGrid,
+			Order = order,
+			Color = entry.Color or Theme.Colors.Blue,
+			Rainbow = entry.Rainbow,
+			Title = entry.Title,
+			Icon = entry.Icon,
+			Bar = price(products[entry.Name].Price),
+			BarColor = Theme.Colors.Green,
+		})
+		tile.Activated:Connect(function()
+			ctx.Purchase("product:" .. entry.Name)
 		end)
-		productCards[name] = card
+		productTiles[entry.Name] = tile
+	end
+
+	local function setOwned(tile, owned: boolean, label: string)
+		tile.BarText.Text = if owned then "OWNED" else label
+		tile.Bar.BackgroundColor3 = if owned then Theme.Colors.GrayDark else Theme.Colors.Green
+		tile.Corner.Text = if owned then "✅" else ""
+		tile.Shade.Visible = owned
 	end
 
 	local function refresh()
@@ -94,17 +96,11 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 		if not data then
 			return
 		end
-		for name, card in passCards do
-			local owned = data.Passes[name] == true
-			card.Button:SetText(if owned then "OWNED" else `R$ {passes[name].Price}`)
-			card.Button:SetColor(if owned then Theme.Colors.Gray else Theme.Colors.Green)
-			card.Button:SetEnabled(not owned)
+		for name, tile in passTiles do
+			setOwned(tile, data.Passes[name] == true, price(passes[name].Price))
 		end
-		for name, card in productCards do
-			local soldOut = products[name].OneTime and data.StarterPackBought
-			card.Button:SetText(if soldOut then "OWNED" else `R$ {products[name].Price}`)
-			card.Button:SetColor(if soldOut then Theme.Colors.Gray else Theme.Colors.Green)
-			card.Button:SetEnabled(not soldOut)
+		for name, tile in productTiles do
+			setOwned(tile, products[name].OneTime == true and data.StarterPackBought, price(products[name].Price))
 		end
 	end
 
