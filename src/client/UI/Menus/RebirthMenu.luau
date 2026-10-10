@@ -31,7 +31,7 @@ local function multiplierCard(parent: Instance, xScale: number): TextLabel
 		Size = UDim2.fromOffset(280, 104),
 		Position = UDim2.new(xScale, 0, 0, 60),
 		AnchorPoint = Vector2.new(0.5, 0),
-		Color = Theme.Colors.Yellow,
+		Color = Theme.Pastel.Butter,
 	})
 	Create.Icon({
 		Text = "⚡",

@@ -13,13 +13,13 @@ local Formulas = require(Shared.Formulas)
 local NumberFormat = require(Shared.NumberFormat)
 
 local ClientData = require(script.Parent.Parent.Parent.ClientData)
-local Create = require(script.Parent.Parent.Create)
 local MenuWindow = require(script.Parent.Parent.MenuWindow)
 local Theme = require(script.Parent.Parent.Theme)
 
 local GiftsMenu = {}
 
-local ROW_COLORS = { Color3.fromRGB(40, 140, 245), Color3.fromRGB(160, 90, 240), Color3.fromRGB(255, 170, 30) }
+-- Soft row colours so the reward icons stand out (the last, best gift stays rainbow).
+local ROW_COLORS = { Theme.Pastel.Blue, Theme.Pastel.Lavender, Theme.Pastel.Peach }
 local ICONS = { Strength = "⚡", Wins = "🏆", Egg = "🥚", Boost = "🧪" }
 
 local function rewardTitle(reward, data): string
@@ -97,16 +97,10 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 		tile.Bar.Size = UDim2.new(1, -18, 0, 36)
 		tile.Art.Position = UDim2.new(0.5, 0, 0, 36)
 		tile.Art.Size = UDim2.new(1, -40, 1, -84)
-		local check = Create.Icon({
-			Name = "Check",
-			Text = "✅",
+		local check = MenuWindow.CheckBadge(tile.Face, 68, {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(84, 84),
+			Position = UDim2.fromScale(0.5, 0.52),
 			Rotation = -8,
-			Visible = false,
-			ZIndex = 9,
-			Parent = tile.Face,
 		})
 		tile.Activated:Connect(function()
 			ctx.ClaimGift(index)
@@ -136,10 +130,11 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 				tile.Bar.Visible = true
 				if remaining <= 0 then
 					tile.BarText.Text = "CLAIM!"
-					tile.Bar.BackgroundColor3 = Theme.Colors.Green
+					tile.Bar.BackgroundColor3 = Theme.Colors.Claim
 				else
+					-- Dark bar: the white countdown reads on every card colour.
 					tile.BarText.Text = formatTime(remaining)
-					tile.Bar.BackgroundColor3 = Theme.Colors.Red
+					tile.Bar.BackgroundColor3 = Theme.Colors.TimerBar
 				end
 			end
 		end

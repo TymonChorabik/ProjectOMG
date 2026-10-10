@@ -53,19 +53,39 @@ function StudPanel.Paint(surface: GuiObject, color: Color3, rainbow: boolean?, g
 	end
 end
 
--- Thin light line just inside the outline: the lit edge of the plastic.
+-- Glossy top highlight (white fading out by the middle) and a thin lit edge just inside the
+-- outline, so plastic reads as raised. Both sit under every child the surface holds.
 function StudPanel.Shine(surface: GuiObject, radius: UDim?)
 	local corner = radius or Theme.CornerRadius
+	local inner = UDim.new(corner.Scale, math.max(0, corner.Offset - 2))
+	Create("Frame", {
+		Name = "Gloss",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(3, 3),
+		Size = UDim2.new(1, -6, 0.5, -3),
+		ZIndex = 0,
+		Parent = surface,
+	}, {
+		Create.Corner(inner),
+		Create("UIGradient", {
+			Rotation = 90,
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.64),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+		}),
+	})
 	Create("Frame", {
 		Name = "Shine",
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(2, 2),
 		Size = UDim2.new(1, -4, 1, -4),
-		ZIndex = surface.ZIndex,
+		ZIndex = 0,
 		Parent = surface,
 	}, {
-		Create.Corner(UDim.new(corner.Scale, math.max(0, corner.Offset - 2))),
-		Create.Stroke(2, Color3.new(1, 1, 1), 0.62),
+		Create.Corner(inner),
+		Create.Stroke(1.5, Color3.new(1, 1, 1), 0.68),
 	})
 end
 

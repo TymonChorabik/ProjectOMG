@@ -27,10 +27,9 @@ local ViewportPreview = require(script.Parent.Parent.ViewportPreview)
 
 local InventoryMenu = {}
 
-local TEAL = Color3.fromRGB(30, 200, 190)
-local GRID_COLOR = Color3.fromRGB(20, 20, 26)
 local INFO_COLOR = Color3.fromRGB(70, 70, 84)
 local INFO_WIDTH = 236
+local TAB_IDLE, TAB_ACTIVE = 100, 114 -- side tab sizes
 local CELL = Vector2.new(96, 106)
 local COLUMNS = 5 -- grid cells stretch so this many fill the grid's width
 local CELL_GAP = 6
@@ -73,25 +72,26 @@ local function button(parent: Instance, props: { [string]: any })
 end
 
 -- White outline around the selected cell.
+-- White outline around the selected cell (otherwise its rarity border / dark outline).
 local function setSelected(tile, selected: boolean)
-	local stroke = tile.Face:FindFirstChildOfClass("UIStroke")
-	if stroke then
-		stroke.Color = if selected then Color3.new(1, 1, 1) else Theme.Colors.Ink
-		stroke.Thickness = if selected then 4.5 else Theme.StrokeThickness
-	end
+	tile.Stroke.Color = if selected then Color3.new(1, 1, 1) else tile.BorderColor
+	tile.Stroke.Thickness = if selected then 4.5 elseif tile.HasBorder then 3.5 else Theme.StrokeThickness
 end
 
 -- A grid cell: bonus on top, 3D preview / icon filling the rest, tick in the corner.
-local function cell(parent: Instance, order: number, color: Color3, rainbow: boolean?, studs: boolean?)
-	local tile = MenuWindow.Tile({
+local function cell(parent: Instance, order: number, color: Color3, rainbow: boolean?, studs: boolean?, border: Color3?)
+	local tile: any = MenuWindow.Tile({
 		Parent = parent,
 		Order = order,
 		Color = color,
 		Rainbow = rainbow,
 		Studs = studs,
+		Border = border,
 		Title = "",
 		Bar = "",
 	})
+	tile.BorderColor = border or Theme.Colors.Ink
+	tile.HasBorder = border ~= nil
 	tile.Bar.Visible = false
 	tile.Art.Position = UDim2.new(0.5, 0, 0, 26)
 	tile.Art.Size = UDim2.new(1, -10, 1, -32)
@@ -188,8 +188,8 @@ local function scaffold(body: Instance, name: string)
 
 	local gridHolder = Create("Frame", {
 		Name = "GridHolder",
-		BackgroundColor3 = GRID_COLOR,
-		BackgroundTransparency = 0.45,
+		BackgroundColor3 = Theme.Colors.GridBackdrop,
+		BackgroundTransparency = 0.2,
 		Position = UDim2.fromOffset(INFO_WIDTH + 8, TOP),
 		Size = UDim2.new(1, -(INFO_WIDTH + 8), 1, -(TOP + BOTTOM)),
 		ZIndex = 3,
@@ -330,7 +330,8 @@ local function handsTab(body: Instance, ctx: { [string]: any })
 
 	local refresh: () -> ()
 	for order, item in items do
-		local tile = cell(ui.Grid, order, Theme.Colors.Blue, item.Pass ~= nil)
+		local tile = cell(ui.Grid, order, Theme.Pastel.Blue, item.Pass ~= nil)
+		tile.Shade.BackgroundTransparency = 0.7 -- locked slots dim, but stay clear of the backdrop
 		ViewportPreview.Item(tile.Art, item, 1.35)
 		tile.Activated:Connect(function()
 			selected = item.Id
@@ -384,9 +385,10 @@ local function handsTab(body: Instance, ctx: { [string]: any })
 				unlockedCount += 1
 			end
 			tile.Title.Text = `+{NumberFormat.Abbreviate(itemBonus(data, item))}`
-			tile.Corner.Text = if equipped then "✅" elseif not unlocked and not item.Pass then "🔒" else ""
+			tile.Check.Visible = equipped
+			tile.Corner.Text = if not unlocked and not item.Pass then "🔒" else ""
 			if not item.Pass then
-				tile.Button:SetColor(if unlocked then Theme.Colors.Blue else Theme.Colors.GrayDark)
+				tile.Button:SetColor(if unlocked then Theme.Pastel.Blue else Theme.Colors.SlotLocked)
 			end
 			tile.Shade.Visible = not unlocked and not item.Pass
 			setSelected(tile, item.Id == selected)
@@ -524,7 +526,15 @@ local function petsTab(body: Instance, ctx: { [string]: any })
 		for order, uid in Formulas.GetBestPetUids(data, math.huge) do
 			local petId = data.Pets[uid]
 			local def = Config.Pets[petId]
-			local tile = cell(ui.Grid, order, Config.Rarities[def.Rarity].Color, def.Rarity == "Secret", false)
+			local rarityColor = Config.Rarities[def.Rarity].Color
+			local tile = cell(
+				ui.Grid,
+				order,
+				Theme.Colors.Slot:Lerp(rarityColor, 0.45),
+				def.Rarity == "Secret",
+				false,
+				rarityColor
+			)
 			ViewportPreview.Pet(tile.Art, petId, 1.35)
 			tile.Activated:Connect(function()
 				if deleteMode then
@@ -568,7 +578,7 @@ local function petsTab(body: Instance, ctx: { [string]: any })
 			tile.Title.Text = if deleteMode
 				then "DELETE"
 				else `+{NumberFormat.Percent(Formulas.GetPetBonus(data, data.Pets[uid]))}`
-			tile.Corner.Text = if equipped then "✅" else ""
+			tile.Check.Visible = equipped
 			tile.Shade.Visible = deleteMode and not equipped
 			setSelected(tile, uid == selected)
 		end
@@ -747,18 +757,21 @@ function InventoryMenu.new(parent: Instance, ctx: { [string]: any })
 		Boosts = boostsTab(body, ctx),
 	}
 
-	-- Big square tabs hanging off the left edge (active one teal).
+	-- Uniform square tabs hanging off the left edge: slate when idle; the selected one is sky
+	-- blue, a size bigger (so it sticks out further) and outlined in white.
 	local tabBar = Create("Frame", {
 		Name = "Tabs",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(0, -12, 0, 70),
-		Size = UDim2.fromOffset(100, 3 * 110),
+		Position = UDim2.new(0, -10, 0, 66),
+		Size = UDim2.fromOffset(TAB_ACTIVE, #TABS * (TAB_ACTIVE + 12)),
 		ZIndex = 2,
 		Parent = window.Instance,
 	}, {
 		Create("UIListLayout", {
 			Padding = UDim.new(0, 12),
+			HorizontalAlignment = Enum.HorizontalAlignment.Right,
+			VerticalAlignment = Enum.VerticalAlignment.Top,
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
@@ -769,10 +782,11 @@ function InventoryMenu.new(parent: Instance, ctx: { [string]: any })
 			Text = "",
 			Icon = tab.Icon,
 			Caption = tab.Name,
-			Color = Theme.Colors.GrayDark,
-			Size = UDim2.fromOffset(100, 98),
+			Color = Theme.Colors.TabIdle,
+			CornerRadius = UDim.new(0, 14),
+			Size = UDim2.fromOffset(TAB_IDLE, TAB_IDLE),
 			MaxTextSize = 24,
-			StrokeThickness = 3,
+			StrokeThickness = 3.5,
 			LayoutOrder = order,
 			Parent = tabBar,
 		})
@@ -789,7 +803,16 @@ function InventoryMenu.new(parent: Instance, ctx: { [string]: any })
 		window.Tab = name
 		for _, tab in TABS do
 			tabs[tab.Name].Page.Visible = tab.Name == name
-			tabButtons[tab.Name]:SetColor(if tab.Name == name then TEAL else Theme.Colors.GrayDark)
+			local active = tab.Name == name
+			local tabButton = tabButtons[tab.Name]
+			tabButton:SetColor(if active then Theme.Colors.TabActive else Theme.Colors.TabIdle)
+			local size = if active then TAB_ACTIVE else TAB_IDLE
+			tabButton.Instance.Size = UDim2.fromOffset(size, size)
+			local outline = tabButton.Face:FindFirstChildOfClass("UIStroke")
+			if outline then
+				outline.Color = if active then Color3.new(1, 1, 1) else Theme.Colors.Ink
+			end
+			tabButton.IconLabel.TextTransparency = if active then 0 else 0.25
 			if tab.Name == name then
 				window:SetTitle(tab.Title, tab.Icon)
 			end

@@ -220,16 +220,22 @@ function EggPanel:_rebuild()
 
 	for order, entry in Formulas.GetEggOdds(egg.Id, luck) do
 		local def = Config.Pets[entry.PetId]
+		-- Same slot look as the inventory: neutral tile tinted by the rarity, rarity border.
+		local rarityColor = Config.Rarities[def.Rarity].Color
 		local tile = StudPanel.new({
 			Name = "Chance",
 			Size = UDim2.fromOffset(TILE.X, TILE.Y),
-			Color = Config.Rarities[def.Rarity].Color,
+			Color = Theme.Colors.Slot:Lerp(rarityColor, 0.45),
 			Rainbow = def.Rarity == "Secret",
-			StrokeThickness = 3,
+			StrokeThickness = 3.5,
 			LayoutOrder = order,
 			ZIndex = 6,
 			Parent = self._tiles,
 		})
+		local border = tile:FindFirstChildOfClass("UIStroke")
+		if border then
+			border.Color = rarityColor
+		end
 		local art = Create("Frame", {
 			BackgroundTransparency = 1,
 			Position = UDim2.fromOffset(4, 2),

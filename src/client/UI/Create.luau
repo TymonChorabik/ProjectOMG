@@ -81,8 +81,72 @@ function Create.Glass(): UIGradient
 	return create("UIGradient", { Name = "Glass", Rotation = 90, Color = Theme.GlassGradient })
 end
 
+-- Soft drop shadow under a label: a dark copy of it one step behind and a few pixels lower,
+-- kept in sync with its text and visibility. Only for freely positioned labels (not in a
+-- layout), since the copy is a sibling.
+function Create.DropShadow(label: TextLabel, offset: number?): TextLabel
+	local shadow = create("TextLabel", {
+		Name = label.Name .. "Shadow",
+		BackgroundTransparency = 1,
+		Text = label.Text,
+		Font = label.Font,
+		TextScaled = label.TextScaled,
+		TextSize = label.TextSize,
+		TextWrapped = label.TextWrapped,
+		RichText = label.RichText,
+		TextXAlignment = label.TextXAlignment,
+		TextYAlignment = label.TextYAlignment,
+		TextColor3 = Theme.Colors.Ink,
+		TextTransparency = 0.55,
+		AnchorPoint = label.AnchorPoint,
+		Position = label.Position + UDim2.fromOffset(0, offset or 3),
+		Size = label.Size,
+		Rotation = label.Rotation,
+		Visible = label.Visible,
+		ZIndex = math.max(1, label.ZIndex - 1),
+	})
+	local constraint = label:FindFirstChildOfClass("UITextSizeConstraint")
+	if constraint then
+		create("UITextSizeConstraint", { MaxTextSize = constraint.MaxTextSize, Parent = shadow })
+	end
+	local stroke = label:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		create("UIStroke", {
+			Thickness = stroke.Thickness,
+			Color = Theme.Colors.Ink,
+			Transparency = 0.55,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+			LineJoinMode = Enum.LineJoinMode.Round,
+			Parent = shadow,
+		})
+	end
+	shadow.Parent = label.Parent
+
+	-- The shadow is one flat dark colour: rich-text colour tags are stripped.
+	local function syncText()
+		shadow.RichText = false
+		shadow.Text = if label.RichText then (string.gsub(label.Text, "<[^>]+>", "")) else label.Text
+	end
+	local function syncBox()
+		shadow.AnchorPoint = label.AnchorPoint
+		shadow.Position = label.Position + UDim2.fromOffset(0, offset or 3)
+		shadow.Size = label.Size
+		shadow.Rotation = label.Rotation
+	end
+	syncText()
+	label:GetPropertyChangedSignal("Text"):Connect(syncText)
+	label:GetPropertyChangedSignal("RichText"):Connect(syncText)
+	for _, property in { "Position", "Size", "AnchorPoint", "Rotation" } do
+		label:GetPropertyChangedSignal(property):Connect(syncBox)
+	end
+	label:GetPropertyChangedSignal("Visible"):Connect(function()
+		shadow.Visible = label.Visible
+	end)
+	return shadow
+end
+
 -- Outlined cartoon text (white, heavy font, thick black outline). Extra props:
--- Stroke = false (no outline), StrokeThickness, MaxTextSize.
+-- Stroke = false (no outline), StrokeThickness, MaxTextSize, Shadow = true (drop shadow).
 function Create.Label(props: { [string]: any }): TextLabel
 	local defaults = {
 		BackgroundTransparency = 1,
@@ -91,7 +155,7 @@ function Create.Label(props: { [string]: any }): TextLabel
 		TextScaled = true,
 	}
 	for key, value in props do
-		if key ~= "Stroke" and key ~= "StrokeThickness" and key ~= "MaxTextSize" then
+		if key ~= "Stroke" and key ~= "StrokeThickness" and key ~= "MaxTextSize" and key ~= "Shadow" then
 			defaults[key] = value
 		end
 	end
@@ -102,14 +166,30 @@ function Create.Label(props: { [string]: any }): TextLabel
 	if props.MaxTextSize then
 		create("UITextSizeConstraint", { MaxTextSize = props.MaxTextSize, Parent = label })
 	end
+	if props.Shadow and label.Parent then
+		Create.DropShadow(label)
+	end
 	return label
 end
 
--- Big emoji "icon" (no outline), centred in its box.
+-- Big emoji "icon", centred in its box, with a soft dark outline so it pops off coloured
+-- plastic (thicker for bigger icons).
 function Create.Icon(props: { [string]: any }): TextLabel
 	props.Stroke = false
 	props.Font = props.Font or Theme.Fonts.Body
-	return Create.Label(props)
+	local label = Create.Label(props)
+	local size = props.Size
+	local px = if typeof(size) == "UDim2" and size.Y.Offset > 0 then size.Y.Offset else 60
+	create("UIStroke", {
+		Name = "IconOutline",
+		Thickness = math.clamp(px / 34, 1.5, 3.5),
+		Color = Theme.Colors.Ink,
+		Transparency = 0.3,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		LineJoinMode = Enum.LineJoinMode.Round,
+		Parent = label,
+	})
+	return label
 end
 
 return Create

@@ -127,7 +127,9 @@ function ChunkyButton.new(props: ButtonProps)
 			Position = UDim2.new(0.5, 0, 1, 2),
 			Size = UDim2.new(1, 4, 0.36, 0),
 			StrokeThickness = props.StrokeThickness or 2.5,
+			MaxTextSize = props.MaxTextSize or 28,
 			ZIndex = 4,
+			Shadow = true,
 			Parent = face,
 		})
 	else
@@ -140,11 +142,15 @@ function ChunkyButton.new(props: ButtonProps)
 			Size = UDim2.new(1, -14, 1, -10),
 			Position = UDim2.fromOffset(7, 5),
 			StrokeThickness = props.StrokeThickness or 2.5,
+			MaxTextSize = props.MaxTextSize or 28,
 			ZIndex = 3,
+			Shadow = true,
 			Parent = face,
 		})
 	end
-	Create("UITextSizeConstraint", { MaxTextSize = props.MaxTextSize or 28, Parent = self.Label })
+	if not self.Label:FindFirstChildOfClass("UITextSizeConstraint") then
+		Create("UITextSizeConstraint", { MaxTextSize = props.MaxTextSize or 28, Parent = self.Label })
+	end
 
 	face.MouseEnter:Connect(function()
 		self._hovered = true

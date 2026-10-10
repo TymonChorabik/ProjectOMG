@@ -36,6 +36,30 @@ Theme.Colors = {
 	PanelYellow = Color3.fromRGB(230, 168, 28),
 	Card = Color3.fromRGB(64, 64, 72),
 	Slate = Color3.fromRGB(46, 46, 54),
+
+	-- Tabs: muted slate when idle, bright sky blue when selected.
+	TabIdle = Color3.fromRGB(91, 100, 130), -- #5B6482
+	TabActive = Color3.fromRGB(46, 196, 240), -- #2EC4F0
+	-- Timer bars on reward cells: dark so the white countdown reads on any card colour.
+	TimerBar = Color3.fromRGB(31, 36, 51), -- #1F2433
+	Claim = Color3.fromRGB(61, 220, 90), -- #3DDC5A
+	-- Item slots in dark grids: light enough not to melt into the backdrop.
+	Slot = Color3.fromRGB(122, 132, 160), -- #7A84A0
+	SlotLocked = Color3.fromRGB(104, 112, 138), -- #68708A
+	GridBackdrop = Color3.fromRGB(42, 47, 63), -- #2A2F3F
+}
+
+-- Soft card backdrops (the colour never fights the icon or text). Rainbow and gold are kept
+-- for the rare / premium offers only.
+Theme.Pastel = {
+	Blue = Color3.fromRGB(110, 193, 250), -- #6EC1FA
+	Lavender = Color3.fromRGB(181, 140, 245), -- #B58CF5
+	Peach = Color3.fromRGB(255, 154, 133), -- #FF9A85
+	Mint = Color3.fromRGB(110, 220, 154), -- #6EDC9A
+	Butter = Color3.fromRGB(255, 209, 102), -- #FFD166
+	Teal = Color3.fromRGB(95, 214, 207), -- #5FD6CF
+	Pink = Color3.fromRGB(255, 159, 203), -- #FF9FCB
+	Slate = Color3.fromRGB(128, 138, 170), -- #808AAA
 }
 
 -- Roblox renders the Gotham fonts as Montserrat: the heavy geometric lettering of the genre.
@@ -57,7 +81,8 @@ end
 
 Theme.CornerRadius = UDim.new(0, 6)
 Theme.StrokeThickness = 3
-Theme.ButtonDepth = 4 -- px of "plastic" below each chunky button
+Theme.ButtonDepth = 5 -- px of dark 3D bevel below each chunky button
+Theme.CardDepth = 5 -- same bevel under cards
 Theme.WindowTransparency = 0.4 -- window bodies: dark glass, the world shows through
 
 -- Rainbow used by premium buttons (+1M pack, x3 offline claim, Rainbow Egg).

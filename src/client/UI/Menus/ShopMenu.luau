@@ -25,7 +25,6 @@ local ViewportPreview = require(script.Parent.Parent.ViewportPreview)
 local ShopMenu = {}
 
 local CREAM = Color3.fromRGB(255, 240, 190)
-local GOLD = Color3.fromRGB(255, 176, 30)
 
 local STRENGTH_PACKS = {
 	{ Product = "Strength10K", Title = "Tiny Pack", Count = 1 },
@@ -40,20 +39,21 @@ local WINS_PACKS = {
 	{ Product = "WinsLarge", Title = "Large Pack", Count = 4 },
 }
 local PASSES = {
-	{ Name = "AutoSmash", Color = Theme.Colors.Red },
-	{ Name = "DoubleStrength", Color = Color3.fromRGB(70, 160, 255) },
-	{ Name = "DoubleWins", Color = Color3.fromRGB(250, 170, 30) },
-	{ Name = "PetSlots", Color = Theme.Colors.Purple },
-	{ Name = "GoldenZone", Color = Color3.fromRGB(240, 190, 30) },
-	{ Name = "DragonZone", Color = Color3.fromRGB(230, 90, 70) },
-	{ Name = "CosmicZone", Color = Color3.fromRGB(40, 40, 70) },
-	{ Name = "PhoenixRelic", Color = Color3.fromRGB(255, 120, 40) },
+	-- Soft pastels; gold and rainbow only for the two premium "always better" passes.
+	{ Name = "AutoSmash", Color = Theme.Pastel.Teal },
+	{ Name = "DoubleStrength", Color = Theme.Pastel.Blue },
+	{ Name = "DoubleWins", Color = Theme.Pastel.Butter },
+	{ Name = "PetSlots", Color = Theme.Pastel.Lavender },
+	{ Name = "GoldenZone", Color = Theme.Pastel.Mint },
+	{ Name = "DragonZone", Color = Theme.Pastel.Peach },
+	{ Name = "CosmicZone", Color = Theme.Pastel.Slate },
+	{ Name = "PhoenixRelic", Color = Theme.Colors.Yellow },
 	{ Name = "LionKing", Rainbow = true },
 }
 local BOOSTS = {
-	{ Product = "BoostStrength", Kind = "Strength", Title = "Strength Boost", Color = Color3.fromRGB(235, 70, 80) },
-	{ Product = "BoostWins", Kind = "Wins", Title = "Wins Boost", Color = Color3.fromRGB(250, 175, 30) },
-	{ Product = "BoostLuck", Kind = "Luck", Title = "Luck Boost", Color = Color3.fromRGB(80, 200, 90) },
+	{ Product = "BoostStrength", Kind = "Strength", Title = "Strength Boost", Color = Theme.Pastel.Peach },
+	{ Product = "BoostWins", Kind = "Wins", Title = "Wins Boost", Color = Theme.Pastel.Butter },
+	{ Product = "BoostLuck", Kind = "Luck", Title = "Luck Boost", Color = Theme.Pastel.Mint },
 }
 
 -- Offsets for piles of 1-4 icons ("more stuff" for bigger packs).
@@ -202,12 +202,12 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 			local card = MenuWindow.Card({ Parent = grid, Order = index, Size = UDim2.fromScale(1, 1), Color = color })
 			Create.Label({
 				Text = pack.Title,
-				TextColor3 = CREAM,
-				Position = UDim2.fromOffset(10, 8),
-				Size = UDim2.new(1, -20, 0, 44),
+				Position = UDim2.fromOffset(14, 10),
+				Size = UDim2.new(1, -28, 0, 42),
 				StrokeThickness = 4.5,
-				MaxTextSize = 40,
+				MaxTextSize = 38,
 				ZIndex = 6,
+				Shadow = true,
 				Parent = card,
 			})
 			local art = Create("Frame", {
@@ -217,6 +217,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 				ZIndex = 5,
 				Parent = card,
 			})
+			MenuWindow.Glow(card, UDim2.fromOffset(77, 108), 120)
 			pile(art, icon, pack.Count, 80)
 			Create.Label({
 				Text = `+{NumberFormat.Abbreviate(product[unit])} {unit}`,
@@ -245,8 +246,8 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 			button.Activated:Connect(buy("product:" .. pack.Product))
 		end
 	end
-	packSection(3, "Strength Packs", STRENGTH_PACKS, "⚡", Color3.fromRGB(70, 150, 255), "Strength")
-	packSection(5, "Wins Packs", WINS_PACKS, "🏆", GOLD, "Wins")
+	packSection(3, "Strength Packs", STRENGTH_PACKS, "⚡", Theme.Pastel.Blue, "Strength")
+	packSection(5, "Wins Packs", WINS_PACKS, "🏆", Theme.Pastel.Butter, "Wins")
 
 	----------------------------------------------------------------------------
 	-- Gamepasses (3 columns)
@@ -264,18 +265,20 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 		})
 		Create.Label({
 			Text = pass.Name,
-			Position = UDim2.fromOffset(8, 8),
-			Size = UDim2.new(1, -16, 0, 34),
+			Position = UDim2.fromOffset(14, 10),
+			Size = UDim2.new(1, -28, 0, 32),
 			StrokeThickness = 4,
 			MaxTextSize = 28,
 			ZIndex = 6,
+			Shadow = true,
 			Parent = card,
 		})
+		MenuWindow.Glow(card, UDim2.new(0.5, 0, 0, 106), 150)
 		Create.Icon({
 			Text = pass.Icon,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0, 108),
-			Size = UDim2.fromOffset(124, 124),
+			Position = UDim2.new(0.5, 0, 0, 106),
+			Size = UDim2.fromOffset(112, 112),
 			ZIndex = 5,
 			Parent = card,
 		})
@@ -300,7 +303,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 			Parent = content,
 			Order = 10,
 			Size = UDim2.new(1, 0, 0, 252),
-			Color = Color3.fromRGB(110, 220, 60),
+			Color = Theme.Pastel.Lavender,
 		})
 		Create.Label({
 			Text = egg and egg.Name or "Rainbow Egg",
@@ -405,7 +408,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 			Parent = content,
 			Order = 12,
 			Size = UDim2.new(1, 0, 0, 190),
-			Gradient = ColorSequence.new(Color3.fromRGB(40, 210, 120), Color3.fromRGB(40, 110, 255)),
+			Gradient = ColorSequence.new(Theme.Pastel.Teal, Theme.Pastel.Blue),
 		})
 		pile(
 			Create("Frame", {
@@ -463,14 +466,15 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 			MenuWindow.Card({ Parent = boostGrid, Order = index, Size = UDim2.fromScale(1, 1), Color = entry.Color })
 		Create.Label({
 			Text = entry.Title,
-			TextColor3 = CREAM,
-			Position = UDim2.fromOffset(8, 8),
-			Size = UDim2.new(1, -16, 0, 36),
+			Position = UDim2.fromOffset(14, 10),
+			Size = UDim2.new(1, -28, 0, 32),
 			StrokeThickness = 4,
-			MaxTextSize = 30,
+			MaxTextSize = 28,
 			ZIndex = 6,
+			Shadow = true,
 			Parent = card,
 		})
+		MenuWindow.Glow(card, UDim2.new(0.5, 0, 0, 96), 120)
 		Create.Icon({
 			Text = boost.Icon,
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -482,8 +486,8 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 		Create.Label({
 			Text = `{string.upper(boost.Name)}\nfor {product.Boosts[1].Minutes} min`,
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -72),
-			Size = UDim2.new(1, -16, 0, 42),
+			Position = UDim2.new(0.5, 0, 1, -74),
+			Size = UDim2.new(1, -28, 0, 40),
 			StrokeThickness = 3,
 			ZIndex = 6,
 			Parent = card,
@@ -507,7 +511,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 			Parent = content,
 			Order = 15,
 			Size = UDim2.new(1, 0, 0, 196),
-			Gradient = ColorSequence.new(Color3.fromRGB(40, 210, 120), Color3.fromRGB(40, 110, 255)),
+			Gradient = ColorSequence.new(Theme.Pastel.Teal, Theme.Pastel.Blue),
 		})
 		Create.Label({
 			Text = "Redeem codes for Free Strength,\nWins & Boosts!",

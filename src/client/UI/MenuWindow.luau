@@ -74,11 +74,12 @@ function MenuWindow.new(props: WindowProps)
 		Text = props.Title,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0, -6),
-		Size = UDim2.new(1, -230, 0, 90),
+		Size = UDim2.new(1, -260, 0, 90),
 		Font = Theme.Fonts.Display,
 		StrokeThickness = 6.5,
 		MaxTextSize = 80,
-		ZIndex = 6,
+		ZIndex = 7,
+		Shadow = true,
 		Parent = panel,
 	})
 	if props.Icon then
@@ -86,8 +87,8 @@ function MenuWindow.new(props: WindowProps)
 			Name = "Icon",
 			Text = props.Icon,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(34, 6),
-			Size = UDim2.fromOffset(124, 124),
+			Position = UDim2.fromOffset(62, 0),
+			Size = UDim2.fromOffset(104, 104),
 			Rotation = -10,
 			ZIndex = 6,
 			Parent = panel,
@@ -100,9 +101,9 @@ function MenuWindow.new(props: WindowProps)
 		Color = Theme.Colors.Close,
 		Studs = false,
 		Font = Theme.Fonts.Display,
-		Size = UDim2.fromOffset(68, 70),
+		Size = UDim2.fromOffset(64, 66),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(1, -10, 0, 4),
+		Position = UDim2.new(1, -46, 0, 0),
 		MaxTextSize = 44,
 		StrokeThickness = 3.5,
 		Parent = panel,
@@ -197,15 +198,24 @@ end
 
 -- Section title inside a window's scroll list, e.g. "~ Gamepasses ~".
 function MenuWindow.Header(parent: Instance, order: number, text: string): TextLabel
-	return Create.Label({
+	local holder = Create("Frame", {
 		Name = "Header",
 		LayoutOrder = order,
-		Text = `~ {text} ~`,
-		Size = UDim2.new(1, 0, 0, 46),
-		StrokeThickness = 4,
-		MaxTextSize = 40,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 48),
 		ZIndex = 2,
 		Parent = parent,
+	})
+	return Create.Label({
+		Name = "Text",
+		Text = `~ {text} ~`,
+		Size = UDim2.new(1, -40, 1, -4),
+		Position = UDim2.fromOffset(20, 0),
+		StrokeThickness = 4.5,
+		MaxTextSize = 40,
+		ZIndex = 3,
+		Shadow = true,
+		Parent = holder,
 	})
 end
 
@@ -246,26 +256,96 @@ export type CardProps = {
 	Studs: boolean?,
 }
 
--- Big studded plastic card with a thick outline (shop offers, rebirth stats, trails).
+-- Big studded plastic card with a thick outline and a dark 3D bevel under it (shop offers,
+-- rebirth stats, trails). Returns the card face; its parent is the holder that takes the
+-- size / position / layout order.
 function MenuWindow.Card(props: CardProps): Frame
-	local card = StudPanel.new({
+	local color = props.Color or Theme.Colors.Blue
+	local bevelColor = if props.Rainbow
+		then Color3.fromRGB(110, 54, 160)
+		elseif props.Gradient then Theme.Shade(props.Gradient.Keypoints[#props.Gradient.Keypoints].Value, 0.34)
+		else Theme.Shade(color, 0.34)
+	local holder = Create("Frame", {
 		Name = "Card",
+		BackgroundTransparency = 1,
 		Size = props.Size,
-		Position = props.Position,
-		AnchorPoint = props.AnchorPoint,
-		Color = props.Color or Theme.Colors.Blue,
+		Position = props.Position or UDim2.new(),
+		AnchorPoint = props.AnchorPoint or Vector2.zero,
+		LayoutOrder = props.Order or 0,
+		ZIndex = 3,
+		Parent = props.Parent,
+	})
+	Create("Frame", {
+		Name = "Bevel",
+		BackgroundColor3 = bevelColor,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, Theme.CardDepth),
+		Size = UDim2.new(1, 0, 1, -Theme.CardDepth),
+		ZIndex = 2,
+		Parent = holder,
+	}, { Create.Corner(), Create.Stroke(4) })
+	local card = StudPanel.new({
+		Name = "Face",
+		Size = UDim2.new(1, 0, 1, -Theme.CardDepth),
+		Color = color,
 		Rainbow = props.Rainbow,
 		Studs = props.Studs,
 		StrokeThickness = 4,
-		LayoutOrder = props.Order,
 		ZIndex = 3,
-		Parent = props.Parent,
+		Parent = holder,
 	})
 	if props.Gradient then
 		StudPanel.Paint(card, Color3.new(1, 1, 1), false, false)
 		Create("UIGradient", { Name = "Plastic", Color = props.Gradient, Rotation = 0, Parent = card })
 	end
 	return card
+end
+
+-- Soft white halo behind a hero icon so it lifts off the card.
+function MenuWindow.Glow(parent: Instance, position: UDim2, size: number, zIndex: number?)
+	for index, scale in { 1, 0.68 } do
+		Create("Frame", {
+			Name = "Glow",
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = if index == 1 then 0.84 else 0.74,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = position,
+			Size = UDim2.fromOffset(size * scale, size * scale),
+			ZIndex = zIndex or 4,
+			Parent = parent,
+		}, { Create.Corner(UDim.new(1, 0)) })
+	end
+end
+
+-- Round green badge with a white tick (equipped / owned / claimed). Hidden by default.
+function MenuWindow.CheckBadge(parent: Instance, size: number, props: { [string]: any }?): Frame
+	local badge = Create("Frame", {
+		Name = "Check",
+		BackgroundColor3 = Theme.Colors.Claim,
+		BorderSizePixel = 0,
+		AnchorPoint = (props and props.AnchorPoint) or Vector2.new(1, 1),
+		Position = (props and props.Position) or UDim2.new(1, -4, 1, -4),
+		Size = UDim2.fromOffset(size, size),
+		Rotation = (props and props.Rotation) or 0,
+		Visible = false,
+		ZIndex = (props and props.ZIndex) or 9,
+		Parent = parent,
+	}, { Create.Corner(UDim.new(1, 0)), Create.Stroke(math.max(2, size / 12)), Create.Bevel(0.25) })
+	local thick = size * 0.16
+	for _, arm in { { 0.33, 0.6, 0.32, 45 }, { 0.6, 0.5, 0.56, -48 } } do
+		Create("Frame", {
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(arm[1], arm[2]),
+			Size = UDim2.fromOffset(size * arm[3], thick),
+			Rotation = arm[4],
+			ZIndex = badge.ZIndex + 1,
+			Parent = badge,
+		}, { Create.Corner(UDim.new(1, 0)) })
+	end
+	return badge
 end
 
 export type PriceProps = {
@@ -278,17 +358,20 @@ export type PriceProps = {
 	MaxTextSize: number?,
 }
 
--- The green studded price / action button used on every offer.
+-- The green Robux / action button used on every offer: smooth gradient plastic (no studs),
+-- glossy top, dark 6px bevel underneath, outlined text with a drop shadow.
 function MenuWindow.PriceButton(props: PriceProps)
 	local button = ChunkyButton.new({
 		Name = "Price",
 		Text = props.Text,
 		Color = props.Color or Theme.Colors.Green,
+		Studs = false,
+		Depth = 6,
 		Size = props.Size or UDim2.fromOffset(150, 58),
 		Position = props.Position,
 		AnchorPoint = props.AnchorPoint,
 		MaxTextSize = props.MaxTextSize or 32,
-		StrokeThickness = 3.5,
+		StrokeThickness = 4,
 		Parent = props.Parent,
 	})
 	button.Instance.ZIndex = 6
@@ -332,6 +415,7 @@ export type TileProps = {
 	BarColor: Color3?,
 	Rainbow: boolean?,
 	Studs: boolean?,
+	Border: Color3?, -- outline colour (rarity), instead of the usual dark outline
 	Size: UDim2?, -- only needed outside a Grid
 }
 
@@ -344,7 +428,9 @@ export type Tile = {
 	Art: Frame, -- holder for 3D previews
 	Bar: Frame,
 	BarText: TextLabel,
-	Corner: TextLabel, -- small label in the top-right corner (equipped tick, bonus...)
+	Corner: TextLabel, -- small label in the bottom-right corner (lock...)
+	Check: Frame, -- green tick badge in the bottom-right corner (equipped / owned)
+	Stroke: UIStroke, -- the outline (rarity border)
 	Shade: Frame, -- darkening overlay for locked / claimed tiles
 }
 
@@ -360,6 +446,11 @@ function MenuWindow.Tile(props: TileProps): Tile
 		Parent = props.Parent,
 	})
 	local face = button.Face
+	local stroke = face:FindFirstChildOfClass("UIStroke") :: UIStroke
+	if props.Border then
+		stroke.Color = props.Border
+		stroke.Thickness = 3.5
+	end
 
 	local title = Create.Label({
 		Name = "Title",
@@ -438,6 +529,8 @@ function MenuWindow.Tile(props: TileProps): Tile
 		Bar = bar,
 		BarText = barText,
 		Corner = corner,
+		Check = MenuWindow.CheckBadge(face, 28),
+		Stroke = stroke,
 		Shade = shade,
 	}
 end

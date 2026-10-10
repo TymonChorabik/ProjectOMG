@@ -790,7 +790,7 @@ def draw_text(cv, b, clip):
                 robux = s == chr(ROBUX)
                 advance = fpx * (0.82 if robux else 1.12)  # the Robux glyph is cap-height sized
                 if im is not None:
-                    eh = int(fpx * (0.7 if robux else 0.92))
+                    eh = max(1, int(fpx * (0.7 if robux else 0.92)))
                     ew = max(1, int(im.width * eh / im.height))
                     em = im.resize((ew, eh), Image.LANCZOS)
                     ey = int(base - fpx * (0.7 if robux else 0.78))
@@ -799,7 +799,8 @@ def draw_text(cv, b, clip):
                         sil = Image.new("RGBA", em.size, st_col + (255,))
                         sil.putalpha(em.getchannel("A"))
                         rad = int(max(1, st_w))
-                        grown = sil.getchannel("A").filter(ImageFilter.MaxFilter(2 * (rad // 2) + 1))
+                        # MaxFilter(1) divides by zero inside Pillow: 3 is the smallest real size.
+                        grown = sil.getchannel("A").filter(ImageFilter.MaxFilter(max(3, 2 * (rad // 2) + 1)))
                         sil2 = Image.new("RGBA", em.size, st_col + (0,))
                         sil2.putalpha(grown)
                         stroke_layer.alpha_composite(sil2, (ex, ey))
