@@ -1,0 +1,5 @@
+# Full Roblox std (needs network once: `selene generate-roblox-std`): std = "roblox"
+std = "roblox_lite"
+
+[lints]
+shadowing = "allow"
