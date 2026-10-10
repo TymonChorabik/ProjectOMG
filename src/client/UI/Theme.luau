@@ -21,10 +21,11 @@ Theme.Colors = {
 	Gray = Color3.fromRGB(130, 128, 140),
 	GrayDark = Color3.fromRGB(72, 70, 82),
 	Ink = Color3.fromRGB(26, 18, 28), -- outlines & text strokes
-	Panel = Color3.fromRGB(46, 30, 52), -- dark plum panel
+	Panel = Color3.fromRGB(46, 52, 66), -- dark slate panel
 	PanelRed = Color3.fromRGB(170, 30, 34),
 	PanelYellow = Color3.fromRGB(230, 168, 28),
-	Card = Color3.fromRGB(70, 48, 78),
+	Card = Color3.fromRGB(58, 64, 80),
+	Slate = Color3.fromRGB(46, 52, 66), -- window body
 }
 
 Theme.Fonts = {
@@ -32,9 +33,9 @@ Theme.Fonts = {
 	Body = Enum.Font.FredokaOne,
 }
 
-Theme.CornerRadius = UDim.new(0, 14)
-Theme.StrokeThickness = 4
-Theme.ButtonDepth = 6 -- px of "plastic" below each chunky button
+Theme.CornerRadius = UDim.new(0, 10)
+Theme.StrokeThickness = 3
+Theme.ButtonDepth = 4 -- px of "plastic" below each chunky button
 
 -- Darken a colour for bevel/shadow layers.
 function Theme.Shade(color: Color3, amount: number): Color3

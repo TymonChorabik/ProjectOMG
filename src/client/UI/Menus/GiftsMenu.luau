@@ -77,8 +77,8 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 		Parent = window.Content,
 	}, {
 		Create("UIGridLayout", {
-			CellSize = UDim2.fromOffset(142, 150),
-			CellPadding = UDim2.fromOffset(10, 10),
+			CellSize = UDim2.fromOffset(124, 126),
+			CellPadding = UDim2.fromOffset(8, 8),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		}),
@@ -94,8 +94,8 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 		}, { Create.Corner(UDim.new(0, 12)), Create.Stroke(3), Create.Bevel(0.25) })
 		local title = Create.Label({
 			Text = "",
-			Position = UDim2.fromOffset(6, 6),
-			Size = UDim2.new(1, -12, 0, 24),
+			Position = UDim2.fromOffset(6, 5),
+			Size = UDim2.new(1, -12, 0, 18),
 			ZIndex = 4,
 			Parent = tile,
 		})
@@ -111,8 +111,8 @@ function GiftsMenu.new(parent: Instance, ctx: { [string]: any })
 			AutoButtonColor = true,
 			Text = "",
 			BackgroundColor3 = Theme.Colors.Red,
-			Position = UDim2.new(0, 8, 1, -36),
-			Size = UDim2.new(1, -16, 0, 28),
+			Position = UDim2.new(0, 7, 1, -29),
+			Size = UDim2.new(1, -14, 0, 22),
 			ZIndex = 4,
 			Parent = tile,
 		}, { Create.Corner(UDim.new(0, 8)), Create.Stroke(2) })

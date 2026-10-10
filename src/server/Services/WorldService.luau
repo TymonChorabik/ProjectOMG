@@ -4,7 +4,8 @@
 
 	The map lives in Workspace.Map (baked from src/workspace/Map/*.model.json, so you can see and
 	edit it in Studio). If it's missing, MapBuilder generates it from Config at startup.
-	Gameplay only reads: TrainingZones/Zone_<Id>/Area, Lane/LaunchPad and Lane/Walls.
+	Gameplay only reads: TrainingZones/Zone_<Id>/Area, TrainingZones/Zone_<Id>/Stations,
+	Lane/LaunchPad and Lane/Walls.
 ]]
 
 local Lighting = game:GetService("Lighting")
@@ -19,8 +20,11 @@ local MapBuilder = require(script.Parent.Parent.Modules.MapBuilder)
 local WorldService = {}
 
 type ZoneArea = { Zone: any, Area: BasePart }
+-- A wooden dummy players "Hold E" at; they train standing on Stand, facing the dummy.
+export type Station = { Id: string, Zone: any, Model: Model, Stand: BasePart }
 
 local zones: { ZoneArea } = {}
+local stations: { [string]: Station } = {}
 local padPart: BasePart? = nil
 
 local function cleanupTemplate()
@@ -102,6 +106,10 @@ function WorldService:GetZoneMultiplier(data, position: Vector3): (number, any)
 	return 1, zone
 end
 
+function WorldService:GetStation(stationId: string): Station?
+	return stations[stationId]
+end
+
 function WorldService:GetPadPosition(): Vector3
 	return if padPart then padPart.Position else Config.Lane.PadPosition
 end
@@ -135,6 +143,16 @@ function WorldService:Init()
 			table.insert(zones, { Zone = zone, Area = area })
 		else
 			warn(`[Kung Fu Chop!] Training zone "{zone.Id}" is missing from Workspace.Map`)
+		end
+		local stationFolder = model and model:FindFirstChild("Stations")
+		if stationFolder then
+			for _, station in stationFolder:GetChildren() do
+				local stationId = station:GetAttribute("StationId")
+				local stand = station:FindFirstChild("Stand")
+				if station:IsA("Model") and type(stationId) == "string" and stand and stand:IsA("BasePart") then
+					stations[stationId] = { Id = stationId, Zone = zone, Model = station, Stand = stand }
+				end
+			end
 		end
 	end
 

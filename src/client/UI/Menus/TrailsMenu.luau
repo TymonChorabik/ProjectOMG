@@ -32,7 +32,7 @@ function TrailsMenu.new(parent: Instance, ctx: { [string]: any })
 
 	local cards = {}
 	for order, trail in Config.Trails do
-		local card = MenuWindow.Card(window.Content, order, 88)
+		local card = MenuWindow.Card(window.Content, order, 76)
 		card.Swatch.BackgroundColor3 = Color3.new(1, 1, 1)
 		local gradient = if trail.Rainbow
 			then ColorSequence.new({

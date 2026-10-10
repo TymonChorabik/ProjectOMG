@@ -4,8 +4,8 @@
 	Shared by the server (authoritative math), the client (display) and the map baker.
 
 	Game loop (one big studded hub, like +1 Stone Skipping):
-	  1. Train  – chop in the training zones (right side). Every chop gives +Strength; standing in a
-	              zone also trains idly. Better zones unlock with rebirths or Robux.
+	  1. Train  – chop in the training zones (right side). Every chop gives +Strength; "Hold E" at
+	              a wooden dummy to train idly. Better zones unlock with rebirths or Robux.
 	  2. Smash  – step on the launch pad and charge down the Board Wall lane. You break every wall
 	              your Strength can handle; each broken wall pays Wins.
 	  3. Equip  – Wins unlock better hand wraps / gauntlets (left side) that add more per chop.
@@ -71,8 +71,12 @@ Config.Training = {
 	-- Server token bucket: excess chop requests are silently dropped.
 	ServerBucketCapacity = 10,
 	ServerBucketRefillPerSecond = 8,
-	-- Standing inside a training zone trains automatically every IdleInterval seconds.
-	IdleInterval = 1.25,
+	-- "Hold E" at a wooden dummy to train there idly: one chop's Strength every IdleInterval
+	-- seconds while you stay on the dummy's stand (within StationRange studs).
+	IdleInterval = 1,
+	StationRange = 5,
+	-- How far from the stand the server still accepts StartTraining (prompt reach + lag).
+	StationStartRange = 16,
 	-- Auto Chop game pass: the client chops for you at this interval.
 	AutoChopInterval = 0.25,
 }

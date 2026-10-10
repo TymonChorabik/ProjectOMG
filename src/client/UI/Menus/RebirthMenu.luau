@@ -27,7 +27,7 @@ function RebirthMenu.new(parent: Instance, ctx: { [string]: any })
 	local summary = Create("Frame", {
 		Name = "Summary",
 		LayoutOrder = 1,
-		Size = UDim2.new(1, -6, 0, 200),
+		Size = UDim2.new(1, -4, 0, 158),
 		BackgroundColor3 = Color3.fromRGB(30, 90, 190),
 		ZIndex = 2,
 		Parent = window.Content,
@@ -35,21 +35,21 @@ function RebirthMenu.new(parent: Instance, ctx: { [string]: any })
 
 	local countLabel = Create.Label({
 		Font = Theme.Fonts.Title,
-		Position = UDim2.fromOffset(16, 10),
-		Size = UDim2.new(1, -32, 0, 36),
+		Position = UDim2.fromOffset(14, 8),
+		Size = UDim2.new(1, -28, 0, 28),
 		ZIndex = 3,
 		Parent = summary,
 	})
 	local boostLabel = Create.Label({
 		TextColor3 = Theme.Colors.Yellow,
-		Position = UDim2.fromOffset(16, 50),
-		Size = UDim2.new(1, -32, 0, 28),
+		Position = UDim2.fromOffset(14, 40),
+		Size = UDim2.new(1, -28, 0, 20),
 		ZIndex = 3,
 		Parent = summary,
 	})
 	local barBack = Create("Frame", {
-		Position = UDim2.fromOffset(16, 88),
-		Size = UDim2.new(1, -32, 0, 30),
+		Position = UDim2.fromOffset(14, 68),
+		Size = UDim2.new(1, -28, 0, 24),
 		BackgroundColor3 = Theme.Colors.Ink,
 		ZIndex = 3,
 		Parent = summary,
@@ -71,8 +71,8 @@ function RebirthMenu.new(parent: Instance, ctx: { [string]: any })
 	Create.Label({
 		Text = "Resets Strength. Keeps Wins, items, pets & trails.",
 		TextColor3 = Theme.Colors.Cream,
-		Position = UDim2.fromOffset(16, 128),
-		Size = UDim2.new(1, -250, 0, 22),
+		Position = UDim2.fromOffset(14, 104),
+		Size = UDim2.new(1, -200, 0, 18),
 		StrokeThickness = 2,
 		ZIndex = 3,
 		Parent = summary,
@@ -82,7 +82,7 @@ function RebirthMenu.new(parent: Instance, ctx: { [string]: any })
 		Icon = "🌀",
 		Color = Theme.Colors.Yellow,
 		Font = Theme.Fonts.Title,
-		Size = UDim2.fromOffset(210, 64),
+		Size = UDim2.fromOffset(160, 48),
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -14, 1, -10),
 		Parent = summary,
@@ -95,7 +95,7 @@ function RebirthMenu.new(parent: Instance, ctx: { [string]: any })
 	MenuWindow.Header(window.Content, 2, "⛩️ TRAINING ZONES")
 	local zoneCards = {}
 	for index, zone in Config.TrainingZones do
-		local card = MenuWindow.Card(window.Content, 10 + index, 80)
+		local card = MenuWindow.Card(window.Content, 10 + index, 70)
 		card.Swatch.BackgroundColor3 = zone.Floor
 		Create("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),

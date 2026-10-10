@@ -2,7 +2,7 @@
 	ChopController.luau
 	Training input. Click / tap the world, press F or R2, or hit the CHOP! button. Each chop plays
 	the karate-chop animation, slash trail and sound immediately and asks the server to credit it.
-	Standing in a training zone also trains idly (the server sends those as idle ChopResults).
+	Idle training at a dummy (TrainingController) arrives here as idle ChopResults.
 	The Auto Chop game pass chops for you while it's toggled on.
 ]]
 
@@ -62,7 +62,10 @@ function ChopController.Chop()
 	lastChop = now
 	Remotes.Chop:FireServer()
 	Sfx.Play("Chop", { Volume = 0.35, PitchVariance = 0.12 })
-	ChopAnimator.Play(false)
+	if not localPlayer:GetAttribute("Training") then
+		-- At a dummy the training loop is already animating the arms.
+		ChopAnimator.Play(false)
+	end
 end
 
 function ChopController.IsAutoChop(): boolean
@@ -95,13 +98,8 @@ local function onChopResult(gain: number, idle: boolean)
 		popupPosition(),
 		"⚡ +" .. NumberFormat.Abbreviate(gain),
 		Color3.fromRGB(255, 220, 70),
-		if idle then 28 else 34
+		if idle then 22 else 26
 	)
-	if idle then
-		-- Idle training: the character keeps chopping on its own.
-		ChopAnimator.Play(false)
-		Sfx.Play("Chop", { Volume = 0.15, PitchVariance = 0.15 })
-	end
 end
 
 local function bindCharacter(character: Model)

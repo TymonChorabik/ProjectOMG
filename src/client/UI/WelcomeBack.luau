@@ -21,7 +21,7 @@ local WelcomeBack = {}
 function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onClaim: (boolean) -> ())
 	local panel = StudPanel.new({
 		Name = "WelcomeBack",
-		Size = UDim2.fromOffset(560, 400),
+		Size = UDim2.fromOffset(430, 300),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Color = Color3.fromRGB(70, 70, 80),
@@ -37,7 +37,7 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 		Font = Theme.Fonts.Title,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = UDim2.new(1, 0, 0, 70),
+		Size = UDim2.new(1, 0, 0, 52),
 		StrokeThickness = 5,
 		ZIndex = 21,
 		Parent = panel,
@@ -46,16 +46,16 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 	local minutes = math.floor(seconds / 60) % 60
 	Create.Label({
 		Text = `You trained while you were offline ({hours}h {minutes}m):`,
-		Position = UDim2.fromOffset(20, 44),
-		Size = UDim2.new(1, -40, 0, 30),
+		Position = UDim2.fromOffset(16, 34),
+		Size = UDim2.new(1, -32, 0, 22),
 		ZIndex = 21,
 		Parent = panel,
 	})
 	Create.Label({
 		Text = "⚡",
 		Stroke = false,
-		Position = UDim2.new(0.5, -60, 0, 84),
-		Size = UDim2.fromOffset(120, 120),
+		Position = UDim2.new(0.5, -42, 0, 62),
+		Size = UDim2.fromOffset(84, 84),
 		ZIndex = 21,
 		Parent = panel,
 	})
@@ -63,8 +63,8 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 		Text = `+{NumberFormat.Commas(amount)} STRENGTH`,
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.Yellow,
-		Position = UDim2.fromOffset(20, 214),
-		Size = UDim2.new(1, -40, 0, 50),
+		Position = UDim2.fromOffset(16, 152),
+		Size = UDim2.new(1, -32, 0, 38),
 		StrokeThickness = 4,
 		ZIndex = 21,
 		Parent = panel,
@@ -83,9 +83,9 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 		Text = `x{multiplier} +{NumberFormat.Abbreviate(amount * multiplier)}  R${Config.Monetization.Products.OfflineTriple.Price}`,
 		Color = Color3.fromRGB(170, 70, 255),
 		Font = Theme.Fonts.Title,
-		Size = UDim2.fromOffset(300, 76),
-		Position = UDim2.new(0, 22, 1, -100),
-		MaxTextSize = 26,
+		Size = UDim2.fromOffset(230, 56),
+		Position = UDim2.new(0, 16, 1, -76),
+		MaxTextSize = 20,
 		Parent = panel,
 	})
 	Create("UIGradient", {
@@ -106,10 +106,10 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 		Text = "Claim!",
 		Color = Theme.Colors.Green,
 		Font = Theme.Fonts.Title,
-		Size = UDim2.fromOffset(196, 76),
+		Size = UDim2.fromOffset(150, 56),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -22, 1, -100),
-		MaxTextSize = 32,
+		Position = UDim2.new(1, -16, 1, -76),
+		MaxTextSize = 24,
 		Parent = panel,
 	})
 	claim.Activated:Connect(function()

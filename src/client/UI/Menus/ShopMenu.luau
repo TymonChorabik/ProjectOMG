@@ -51,7 +51,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 	MenuWindow.Header(window.Content, 0, "⭐ GAME PASSES")
 	for order, name in PASS_ORDER do
 		local pass = passes[name]
-		local card = MenuWindow.Card(window.Content, order, 88)
+		local card = MenuWindow.Card(window.Content, order, 76)
 		iconSwatch(card.Swatch, pass.Icon, Color3.fromRGB(255, 220, 120))
 		card.Title.Text = pass.Name
 		card.Subtitle.Text = pass.Description
@@ -65,7 +65,7 @@ function ShopMenu.new(parent: Instance, ctx: { [string]: any })
 	MenuWindow.Header(window.Content, 100, "💎 PACKS & BOOSTS")
 	for order, name in PRODUCT_ORDER do
 		local product = products[name]
-		local card = MenuWindow.Card(window.Content, 100 + order, 88)
+		local card = MenuWindow.Card(window.Content, 100 + order, 76)
 		iconSwatch(card.Swatch, PRODUCT_ICONS[name] or "💎", Color3.fromRGB(170, 230, 255))
 		card.Title.Text = product.Name
 		local parts = {}

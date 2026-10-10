@@ -3,8 +3,8 @@
 Train your chop, then **smash through a wall of boards** as far as your Strength takes you.
 One big studded hub, laid out like *+1 Stone Skipping*:
 
-* **Right side – training zones.** Chop for **+Strength** (manual, or idle just by standing in a
-  zone). Better zones (x4, x10, x20) unlock with rebirths; x30 / x75 / x200 zones are Robux passes.
+* **Right side – training zones.** Chop for **+Strength**, or **hold E at a wooden dummy** and your
+  character punches it on its own (idle training). Better zones (x4, x10, x20) unlock with rebirths; x30 / x75 / x200 zones are Robux passes.
 * **Centre – the Board Wall lane.** Step on the launch pad and press **SMASH!** Your character
   flies down the lane and breaks every wall your Strength can handle through 6 biomes (Bamboo
   Grove → Autumn Temple → Frost Peak → Lava Fortress → Sky Palace → Cosmic Rift). Every broken
@@ -41,7 +41,7 @@ in-memory data and shows a "progress won't be saved" message. Leaderboards also 
 | Action | How |
 |---|---|
 | Chop (train) | Click / tap the world, press **F** / **R2**, or hit **CHOP!** |
-| Idle training | Stand inside a training zone |
+| Idle training | Walk up to a wooden dummy and **hold E**. Move or jump to stop |
 | Smash the wall | Stand on the yellow launch pad and press **SMASH!** (or **E**) |
 | Equip hand items | Walk up to a pedestal and press **E**, or use **Inventory** |
 | Hatch eggs | Walk up to an egg and press **E** |
@@ -53,10 +53,15 @@ it at **ReplicatedStorage → Shared → Config**.
 
 ---
 
-## 🧱 The square stud look (one upload, about 1 minute)
+## 🧱 Studs
 
-Out of the box the parts use Roblox's built-in round studs. For the square studs from Stone
-Skipping and Steal an Egg (the dark "L" bevel on each stud), upload one image:
+**The UI already uses the map's studs.** Panels and buttons show a real studded plastic plate
+(the same `SurfaceType.Studs` surface as the map) rendered in a `ViewportFrame`
+(`src/client/UI/StudBackground.luau`). There's nothing to upload.
+
+**Optional: square studs.** Out of the box the parts use Roblox's built-in round studs. For the
+square studs from Stone Skipping and Steal an Egg (the dark "L" bevel on each stud), upload one
+image:
 
 1. In Studio: **View → Asset Manager → Bulk Import**, and pick `assets/textures/stud_overlay.png`.
 2. In the Asset Manager's *Images* folder, right-click it and choose **Copy Asset ID**.
@@ -64,8 +69,8 @@ Skipping and Steal an Egg (the dark "L" bevel on each stud), upload one image:
    ```lua
    StudTexture = "rbxassetid://1234567890",
    ```
-4. Press Play. Every studded part and every UI panel switches to square studs. To see it in edit
-   mode too, run this once in the **Command Bar**:
+4. Press Play. Every studded part switches to square studs, and the UI panels switch to the
+   tiled image (ImageLabel, ScaleType Tile, TileSize 32×32). To see it in edit mode too, run this once in the **Command Bar**:
    ```lua
    require(game.ServerScriptService.Server.Modules.MapBuilder).ApplyStudTextures(workspace.Map)
    ```
@@ -77,9 +82,9 @@ Skipping and Steal an Egg (the dark "L" bevel on each stud), upload one image:
 |---|---|---|
 | ![stud](assets/textures/stud_tile.png) | ![floor](assets/textures/stud_floor_preview.png) | ![ui](assets/textures/stud_ui_preview.png) |
 
-**Studded UI background (Steal an Egg style):** `src/client/UI/StudBackground.luau` builds every
-panel like this, and you can do the same by hand: put an **ImageLabel** inside the panel Frame, set
-**Image** to the stud texture, **ScaleType = Tile** and **TileSize = UDim2.new(0, 32, 0, 32)**.
+**Studded UI background by hand (Steal an Egg style):** put an **ImageLabel** inside the panel
+Frame, set **Image** to the stud texture, **ScaleType = Tile** and
+**TileSize = UDim2.new(0, 32, 0, 32)**.
 
 ---
 
@@ -104,7 +109,8 @@ Slots, the three Robux training zones, Phoenix Relic, the Lion King pet, Strengt
 Luau code the game uses (`src/server/Modules/MapBuilder.luau`).
 
 * Edit freely in Studio. Gameplay only needs these names: `TrainingZones/Zone_<Id>/Area`,
-  `Lane/LaunchPad`, `Lane/Walls/Wall_<n>`, `Items/Item_<Id>`, `Eggs/Egg_<Id>`, `Showcase` and
+  `TrainingZones/Zone_<Id>/Stations/Station_<n>` (a `StationId` attribute, `DummyPost`,
+  `DummyBase` and an invisible `Stand` part facing the dummy), `Lane/LaunchPad`, `Lane/Walls/Wall_<n>`, `Items/Item_<Id>`, `Eggs/Egg_<Id>`, `Showcase` and
   `Leaderboards/<BoardId>/Panel`.
 * If `Workspace.Map` is deleted, the server rebuilds it at startup.
 * After changing zones, items, eggs or biomes in Config, re-bake with
@@ -128,7 +134,7 @@ src/shared/            → ReplicatedStorage.Shared
 src/server/            → ServerScriptService.Server
   Services/DataService         session-locked DataStore profiles, autosave, replication
   Services/WorldService        loads Workspace.Map, lighting, zone detection
-  Services/TrainingService     manual + idle chops (rate limited)
+  Services/TrainingService     manual chops (rate limited) + Hold-E dummy training
   Services/LaneService         board wall runs: walls broken, distance, wins
   Services/PetService          eggs, hatching, equip / delete
   Services/ProgressService     wins, hand items, trails, rebirth
@@ -140,7 +146,8 @@ src/server/            → ServerScriptService.Server
   Services/ActionService       one validated remote for every player request
   Modules/MapBuilder           builds the hub (used offline by the baker + as a fallback)
 src/client/            → StarterPlayerScripts.Client
-  Controllers/ChopController   input, idle chops, Auto Chop
+  Controllers/ChopController   chop input, Auto Chop
+  Controllers/TrainingController Hold-E dummies: stand, punch loop, dummy wobble
   Controllers/LaneController   the wall run: flight, shattering walls, camera, distance
   Controllers/PetController    everyone's pets following them
   Controllers/WorldController  pedestal / egg / showcase prompts, live signs

@@ -347,7 +347,8 @@ function UIController.Start()
 			return
 		end
 		local viewport = camera.ViewportSize
-		local scale = math.clamp(math.min(viewport.X / 1400, viewport.Y / 820), 0.5, 1.15)
+		-- Designed at 1920x1080 (scale 1); shrinks on smaller screens, never grows.
+		local scale = math.clamp(math.min(viewport.X / 1920, viewport.Y / 1080), 0.55, 1)
 		for _, uiScale in hud.Scales do
 			uiScale.Scale = scale
 		end

@@ -29,7 +29,7 @@ function InventoryMenu.new(parent: Instance, ctx: { [string]: any })
 	table.insert(items, Config.PremiumItem)
 
 	for order, item in items do
-		local card = MenuWindow.Card(window.Content, order, 92)
+		local card = MenuWindow.Card(window.Content, order, 76)
 		card.Swatch.BackgroundColor3 = Color3.fromRGB(220, 235, 250)
 		ViewportPreview.Item(card.Swatch, item)
 		card.Title.Text = item.Name

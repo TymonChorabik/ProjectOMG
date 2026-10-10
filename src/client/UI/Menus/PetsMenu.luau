@@ -32,15 +32,15 @@ function PetsMenu.new(parent: Instance, ctx: { [string]: any })
 		Name = "Toolbar",
 		LayoutOrder = 0,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -6, 0, 66),
+		Size = UDim2.new(1, -4, 0, 50),
 		ZIndex = 2,
 		Parent = window.Content,
 	})
 	local summary = Create.Label({
 		Text = "",
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -330, 1, -16),
-		Position = UDim2.fromOffset(6, 8),
+		Size = UDim2.new(1, -270, 1, -18),
+		Position = UDim2.fromOffset(4, 9),
 		ZIndex = 3,
 		Parent = toolbar,
 	})
@@ -48,10 +48,10 @@ function PetsMenu.new(parent: Instance, ctx: { [string]: any })
 		Text = "EQUIP BEST",
 		Color = Theme.Colors.Blue,
 		Font = Theme.Fonts.Title,
-		Size = UDim2.fromOffset(150, 58),
+		Size = UDim2.fromOffset(122, 44),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -168, 0, 2),
-		MaxTextSize = 22,
+		Position = UDim2.new(1, -134, 0, 2),
+		MaxTextSize = 17,
 		Parent = toolbar,
 	})
 	bestButton.Activated:Connect(function()
@@ -61,17 +61,17 @@ function PetsMenu.new(parent: Instance, ctx: { [string]: any })
 		Text = "🗑 DELETE",
 		Color = Theme.Colors.GrayDark,
 		Font = Theme.Fonts.Title,
-		Size = UDim2.fromOffset(150, 58),
+		Size = UDim2.fromOffset(122, 44),
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -8, 0, 2),
-		MaxTextSize = 22,
+		Position = UDim2.new(1, -6, 0, 2),
+		MaxTextSize = 17,
 		Parent = toolbar,
 	})
 
 	local emptyLabel = Create.Label({
 		Text = "No pets yet! Hatch eggs behind spawn with your Wins.",
 		LayoutOrder = 1,
-		Size = UDim2.new(1, -6, 0, 40),
+		Size = UDim2.new(1, -4, 0, 30),
 		ZIndex = 2,
 		Visible = false,
 		Parent = window.Content,
@@ -122,7 +122,7 @@ function PetsMenu.new(parent: Instance, ctx: { [string]: any })
 		for order, uid in uids do
 			local petId = data.Pets[uid]
 			local def = Config.Pets[petId]
-			local card = MenuWindow.Card(window.Content, 10 + order, 92)
+			local card = MenuWindow.Card(window.Content, 10 + order, 76)
 			card.Swatch.BackgroundColor3 = Color3.fromRGB(225, 240, 255)
 			ViewportPreview.Pet(card.Swatch, petId)
 			card.Title.Text = def.Name

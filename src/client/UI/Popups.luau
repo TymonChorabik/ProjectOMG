@@ -39,8 +39,8 @@ local function getGui(): ScreenGui
 		Name = "Toasts",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 140),
-		Size = UDim2.fromOffset(460, 300),
+		Position = UDim2.new(0.5, 0, 0, 110),
+		Size = UDim2.fromOffset(360, 240),
 		Parent = gui,
 	}, {
 		Create("UIListLayout", {
@@ -54,8 +54,8 @@ local function getGui(): ScreenGui
 		Name = "Banner",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.32),
-		Size = UDim2.fromOffset(640, 140),
+		Position = UDim2.fromScale(0.5, 0.3),
+		Size = UDim2.fromOffset(460, 96),
 		Parent = gui,
 	})
 
@@ -65,7 +65,7 @@ end
 -- Chop gain number that pops at a screen position and floats upward.
 function Popups.ScreenText(screenPosition: Vector2, text: string, color: Color3, size: number?)
 	local screenGui = getGui()
-	local height = size or 34
+	local height = size or 26
 	local label = Create.Label({
 		Text = text,
 		Font = Theme.Fonts.Title,
@@ -163,20 +163,23 @@ function Popups.Toast(message: string, kind: string?)
 
 	local panel = StudPanel.new({
 		Name = "Toast",
-		Size = UDim2.fromOffset(440, 52),
+		Size = UDim2.fromOffset(350, 38),
 		Color = TOAST_COLORS[kind or "Info"] or Theme.Colors.Panel,
 		Transparency = 0.05,
-		CornerRadius = UDim.new(0, 12),
-		StrokeThickness = 3,
+		CornerRadius = UDim.new(0, 8),
+		StrokeThickness = 2.5,
+		Studs = false,
 	})
 	panel.LayoutOrder = math.floor(os.clock() * 1000) % 1_000_000_000
-	Create.Label({
+	local text = Create.Label({
 		Text = message,
-		Size = UDim2.new(1, -24, 1, -14),
-		Position = UDim2.fromOffset(12, 7),
+		Size = UDim2.new(1, -20, 1, -10),
+		Position = UDim2.fromOffset(10, 5),
+		StrokeThickness = 2,
 		ZIndex = 2,
 		Parent = panel,
 	})
+	Create("UITextSizeConstraint", { MaxTextSize = 18, Parent = text })
 	local scale = Create("UIScale", { Scale = 0.6, Parent = panel })
 	panel.Parent = holder
 
@@ -207,14 +210,14 @@ function Popups.Banner(title: string, subtitle: string, color: Color3?)
 		Font = Theme.Fonts.Title,
 		TextColor3 = color or Theme.Colors.Yellow,
 		Size = UDim2.fromScale(1, 0.65),
-		StrokeThickness = 5,
+		StrokeThickness = 4,
 		Parent = holder,
 	})
 	local subtitleLabel = Create.Label({
 		Text = subtitle,
 		Size = UDim2.fromScale(0.7, 0.3),
 		Position = UDim2.fromScale(0.15, 0.68),
-		StrokeThickness = 3,
+		StrokeThickness = 2.5,
 		Parent = holder,
 	})
 	local scale = Create("UIScale", { Scale = 1.6, Parent = holder })

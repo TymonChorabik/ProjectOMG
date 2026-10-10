@@ -1,13 +1,14 @@
 --[[
 	Hud.luau
-	HUD laid out like +1 Stone Skipping:
-	• Left        – 2x3 grid of chunky icon buttons: Shop, Rebirth (+%), Pets, Trails, Inventory, Gifts
-	• Bottom-left – rebirths, wins, friend boost
-	• Bottom      – ⚡ Strength + multiplier, studded Level bar, three Robux Strength packs
-	• Top         – AUTO CHOP banner (turns into an on/off toggle once owned)
-	• Right       – Starter Pack, 2x Strength, 2x Wins offers + active boost timers
-	• Bottom-right – big round CHOP! / SMASH! button
-	• Run HUD     – distance counter ("904 m")
+	Compact HUD laid out like +1 Stone Skipping (sizes are for 1920x1080; UIController scales
+	everything down on smaller screens):
+	• Left         – 2x3 grid of icon tiles: Shop, Rebirth (+%), Pets, Trails, Inventory, Gifts
+	• Bottom-left  – rebirths, wins, friend boost
+	• Bottom       – ⚡ Strength + multiplier, studded Level bar, three Robux Strength packs
+	• Top          – AUTO CHOP banner (turns into an on/off toggle once owned) + run distance
+	• Right        – Starter Pack, 2x Strength, 2x Wins offers + active boost timers
+	• Bottom-right – round CHOP! / SMASH! button
+	Panels and buttons use studded plastic, the same studs as the map.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,6 +26,7 @@ local Theme = require(script.Parent.Theme)
 local Hud = {}
 
 local PULSE_INFO = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local TILE = 70
 
 local function container(props: { [string]: any }): (Frame, UIScale)
 	props.BackgroundTransparency = 1
@@ -33,7 +35,7 @@ local function container(props: { [string]: any }): (Frame, UIScale)
 	return frame, scale
 end
 
-local function statLine(parent: Instance, order: number, icon: string, height: number)
+local function statLine(parent: Instance, order: number, icon: string, height: number): TextLabel
 	local row = Create("Frame", {
 		BackgroundTransparency = 1,
 		LayoutOrder = order,
@@ -41,16 +43,15 @@ local function statLine(parent: Instance, order: number, icon: string, height: n
 		Parent = parent,
 	})
 	Create.Label({ Text = icon, Stroke = false, Size = UDim2.fromOffset(height, height), Parent = row })
-	local value = Create.Label({
+	return Create.Label({
 		Text = "0",
 		Font = Theme.Fonts.Title,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(height + 8, 0),
-		Size = UDim2.new(1, -(height + 8), 1, 0),
-		StrokeThickness = 3,
+		Position = UDim2.fromOffset(height + 6, 0),
+		Size = UDim2.new(1, -(height + 6), 1, 0),
+		StrokeThickness = 2,
 		Parent = row,
 	})
-	return value
 end
 
 function Hud.new(gui: ScreenGui)
@@ -71,25 +72,25 @@ function Hud.new(gui: ScreenGui)
 	local left, leftScale = container({
 		Name = "MenuGrid",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 14, 0.45, 0),
-		Size = UDim2.fromOffset(196, 300),
+		Position = UDim2.new(0, 12, 0.5, 0),
+		Size = UDim2.fromOffset(TILE * 2 + 6, TILE * 3 + 18),
 		Parent = gui,
 	})
 	table.insert(hud.Scales, leftScale)
 	Create("UIGridLayout", {
-		CellSize = UDim2.fromOffset(92, 94),
-		CellPadding = UDim2.fromOffset(10, 8),
+		CellSize = UDim2.fromOffset(TILE, TILE + 2),
+		CellPadding = UDim2.fromOffset(6, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = left,
 	})
 	for order, entry in
 		{
-			{ Name = "Shop", Icon = "🛒", Color = Color3.fromRGB(255, 80, 90) },
-			{ Name = "Rebirth", Icon = "🌀", Color = Color3.fromRGB(80, 170, 255) },
-			{ Name = "Pets", Icon = "🐾", Color = Color3.fromRGB(255, 160, 60) },
-			{ Name = "Trails", Icon = "✨", Color = Color3.fromRGB(170, 90, 255) },
-			{ Name = "Inventory", Icon = "🎒", Color = Color3.fromRGB(150, 100, 70) },
-			{ Name = "Gifts", Icon = "🎁", Color = Color3.fromRGB(70, 200, 90) },
+			{ Name = "Shop", Icon = "🛒" },
+			{ Name = "Rebirth", Icon = "🌀" },
+			{ Name = "Pets", Icon = "🐾" },
+			{ Name = "Trails", Icon = "✨" },
+			{ Name = "Inventory", Icon = "🎒" },
+			{ Name = "Gifts", Icon = "🎁" },
 		}
 	do
 		local button = ChunkyButton.new({
@@ -97,10 +98,11 @@ function Hud.new(gui: ScreenGui)
 			Text = entry.Name,
 			Icon = entry.Icon,
 			Caption = entry.Name,
-			Color = entry.Color,
-			Size = UDim2.fromOffset(92, 94),
+			Color = Color3.fromRGB(52, 58, 74),
+			Size = UDim2.fromOffset(TILE, TILE + 2),
 			LayoutOrder = order,
-			MaxTextSize = 20,
+			MaxTextSize = 14,
+			Studs = true,
 			Parent = left,
 		})
 		button.Activated:Connect(function()
@@ -115,19 +117,20 @@ function Hud.new(gui: ScreenGui)
 	local stats, statsScale = container({
 		Name = "Stats",
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 18, 1, -16),
-		Size = UDim2.fromOffset(250, 128),
+		Position = UDim2.new(0, 16, 1, -14),
+		Size = UDim2.fromOffset(190, 84),
 		Parent = gui,
 	})
 	table.insert(hud.Scales, statsScale)
-	Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4), Parent = stats })
-	hud.RebirthsLabel = statLine(stats, 1, "🌀", 42)
-	hud.WinsLabel = statLine(stats, 2, "🏆", 42)
+	Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2), Parent = stats })
+	hud.RebirthsLabel = statLine(stats, 1, "🌀", 28)
+	hud.WinsLabel = statLine(stats, 2, "🏆", 28)
 	hud.FriendLabel = Create.Label({
 		Text = "Friend Boost +0%",
 		LayoutOrder = 3,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, 0, 0, 28),
+		Size = UDim2.new(1, 0, 0, 20),
+		StrokeThickness = 2,
 		Parent = stats,
 	})
 
@@ -137,8 +140,8 @@ function Hud.new(gui: ScreenGui)
 	local bottom, bottomScale = container({
 		Name = "Bottom",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.fromOffset(640, 196),
+		Position = UDim2.new(0.5, 0, 1, -10),
+		Size = UDim2.fromOffset(470, 132),
 		Parent = gui,
 	})
 	table.insert(hud.Scales, bottomScale)
@@ -148,8 +151,9 @@ function Hud.new(gui: ScreenGui)
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.Yellow,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(0.6, 0, 0, 34),
-		StrokeThickness = 3,
+		Position = UDim2.fromOffset(4, 0),
+		Size = UDim2.new(0.6, 0, 0, 24),
+		StrokeThickness = 2,
 		Parent = bottom,
 	})
 	hud.MultiplierLabel = Create.Label({
@@ -158,25 +162,23 @@ function Hud.new(gui: ScreenGui)
 		TextColor3 = Theme.Colors.Yellow,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromScale(1, 0),
-		Size = UDim2.new(0.4, 0, 0, 30),
-		StrokeThickness = 3,
+		Position = UDim2.new(1, -4, 0, 2),
+		Size = UDim2.new(0.4, 0, 0, 20),
+		StrokeThickness = 2,
 		Parent = bottom,
 	})
 
 	local levelBar = StudPanel.new({
 		Name = "LevelBar",
-		Size = UDim2.new(1, 0, 0, 66),
-		Position = UDim2.fromOffset(0, 40),
-		Color = Color3.fromRGB(30, 110, 230),
-		Transparency = 0,
-		StudTint = Color3.fromRGB(150, 210, 255),
+		Size = UDim2.new(1, 0, 0, 44),
+		Position = UDim2.fromOffset(0, 28),
+		Color = Color3.fromRGB(30, 120, 240),
 		Parent = bottom,
 	})
 	hud.LevelFill = Create("Frame", {
 		Name = "Fill",
-		BackgroundColor3 = Color3.fromRGB(60, 200, 255),
-		BackgroundTransparency = 0.35,
+		BackgroundColor3 = Color3.fromRGB(120, 220, 255),
+		BackgroundTransparency = 0.55,
 		Size = UDim2.fromScale(0, 1),
 		ZIndex = 1,
 		Parent = levelBar,
@@ -185,9 +187,9 @@ function Hud.new(gui: ScreenGui)
 		Text = "Level 1",
 		Font = Theme.Fonts.Title,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromOffset(20, 8),
-		Size = UDim2.new(0.5, -20, 1, -16),
-		StrokeThickness = 3,
+		Position = UDim2.fromOffset(14, 6),
+		Size = UDim2.new(0.5, -14, 1, -12),
+		StrokeThickness = 2.5,
 		ZIndex = 3,
 		Parent = levelBar,
 	})
@@ -196,31 +198,31 @@ function Hud.new(gui: ScreenGui)
 		Font = Theme.Fonts.Title,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -20, 0, 14),
-		Size = UDim2.new(0.5, -20, 1, -28),
-		StrokeThickness = 3,
+		Position = UDim2.new(1, -14, 0, 11),
+		Size = UDim2.new(0.5, -14, 1, -22),
+		StrokeThickness = 2,
 		ZIndex = 3,
 		Parent = levelBar,
 	})
 
 	local packs = Create("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 114),
-		Size = UDim2.new(1, 0, 0, 78),
+		Position = UDim2.fromOffset(0, 78),
+		Size = UDim2.new(1, 0, 0, 54),
 		Parent = bottom,
 	}, {
 		Create("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			Padding = UDim.new(0, 11),
+			Padding = UDim.new(0, 9),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
 	for order, entry in
 		{
-			{ Product = "Strength10K", Label = "+10K", Color = Color3.fromRGB(255, 200, 40) },
-			{ Product = "Strength100K", Label = "+100K", Color = Color3.fromRGB(235, 60, 60) },
-			{ Product = "Strength1M", Label = "+1M", Color = Color3.fromRGB(170, 70, 255) },
+			{ Product = "Strength10K", Label = "+10K", Color = Color3.fromRGB(255, 196, 40) },
+			{ Product = "Strength100K", Label = "+100K", Color = Color3.fromRGB(235, 64, 64) },
+			{ Product = "Strength1M", Label = "+1M", Color = Color3.fromRGB(165, 80, 255) },
 		}
 	do
 		local product = Config.Monetization.Products[entry.Product]
@@ -228,17 +230,26 @@ function Hud.new(gui: ScreenGui)
 			Name = entry.Product,
 			Text = "⚡ " .. entry.Label,
 			Color = entry.Color,
-			Font = Theme.Fonts.Title,
-			Size = UDim2.fromOffset(206, 74),
+			Size = UDim2.fromOffset(150, 52),
 			LayoutOrder = order,
-			MaxTextSize = 34,
+			MaxTextSize = 24,
+			Studs = true,
 			Parent = packs,
 		})
-		button:SetBadge(`R${product.Price}`)
-		local badge = button.Instance:FindFirstChild("Badge") :: TextLabel
-		badge.BackgroundColor3 = Color3.fromRGB(40, 170, 60)
-		badge.Size = UDim2.fromOffset(52, 26)
-		badge.Position = UDim2.new(1, -14, 1, -8)
+		local price = Create.Label({
+			Name = "Price",
+			Text = `R${product.Price}`,
+			BackgroundTransparency = 0,
+			BackgroundColor3 = Color3.fromRGB(40, 170, 70),
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, 4, 1, 2),
+			Size = UDim2.fromOffset(44, 20),
+			StrokeThickness = 1.5,
+			ZIndex = 10,
+			Parent = button.Instance,
+		})
+		Create.Corner(UDim.new(0, 6)).Parent = price
+		Create.Stroke(2).Parent = price
 		button.Activated:Connect(function()
 			hud.PackPressed:Fire(entry.Product)
 		end)
@@ -251,18 +262,18 @@ function Hud.new(gui: ScreenGui)
 	local top, topScale = container({
 		Name = "Top",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 8),
-		Size = UDim2.fromOffset(300, 180),
+		Position = UDim2.new(0.5, 0, 0, 6),
+		Size = UDim2.fromOffset(220, 130),
 		Parent = gui,
 	})
 	table.insert(hud.Scales, topScale)
 	hud.AutoChopButton = ChunkyButton.new({
 		Name = "AutoChop",
-		Text = "🤖 AUTO CHOP\nONLY R$" .. Config.Monetization.GamePasses.AutoChop.Price,
+		Text = "AUTO CHOP\nONLY R$" .. Config.Monetization.GamePasses.AutoChop.Price,
 		Color = Theme.Colors.Red,
-		Font = Theme.Fonts.Title,
-		Size = UDim2.fromOffset(300, 78),
-		MaxTextSize = 30,
+		Size = UDim2.fromOffset(220, 54),
+		MaxTextSize = 20,
+		Studs = true,
 		Parent = top,
 	})
 	hud.AutoChopButton.Activated:Connect(function()
@@ -273,9 +284,9 @@ function Hud.new(gui: ScreenGui)
 		Text = "0 m",
 		Font = Theme.Fonts.Title,
 		TextColor3 = Theme.Colors.Yellow,
-		Position = UDim2.fromOffset(-50, 86),
-		Size = UDim2.new(1, 100, 0, 80),
-		StrokeThickness = 5,
+		Position = UDim2.fromOffset(-60, 60),
+		Size = UDim2.new(1, 120, 0, 56),
+		StrokeThickness = 3,
 		Visible = false,
 		Parent = top,
 	})
@@ -286,15 +297,15 @@ function Hud.new(gui: ScreenGui)
 	local right, rightScale = container({
 		Name = "Offers",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -14, 0.42, 0),
-		Size = UDim2.fromOffset(200, 330),
+		Position = UDim2.new(1, -12, 0.45, 0),
+		Size = UDim2.fromOffset(156, 290),
 		Parent = gui,
 	})
 	table.insert(hud.Scales, rightScale)
 	Create("UIListLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		HorizontalAlignment = Enum.HorizontalAlignment.Right,
-		Padding = UDim.new(0, 10),
+		Padding = UDim.new(0, 8),
 		Parent = right,
 	})
 	local passes, products = Config.Monetization.GamePasses, Config.Monetization.Products
@@ -305,20 +316,20 @@ function Hud.new(gui: ScreenGui)
 				Key = "product:StarterPack",
 				Icon = "🎁",
 				Caption = "STARTER PACK",
-				Color = Color3.fromRGB(255, 120, 200),
-				Height = 112,
+				Color = Color3.fromRGB(255, 110, 190),
+				Size = UDim2.fromOffset(92, 84),
 			},
 			{
 				Key = "pass:DoubleStrength",
 				Text = `⚡ 2x STRENGTH\nONLY R${passes.DoubleStrength.Price}`,
-				Color = Color3.fromRGB(120, 210, 60),
-				Height = 72,
+				Color = Color3.fromRGB(110, 200, 50),
+				Size = UDim2.fromOffset(152, 52),
 			},
 			{
 				Key = "pass:DoubleWins",
 				Text = `🏆 2x WINS\nONLY R${passes.DoubleWins.Price}`,
-				Color = Color3.fromRGB(255, 180, 40),
-				Height = 72,
+				Color = Color3.fromRGB(250, 175, 35),
+				Size = UDim2.fromOffset(152, 52),
 			},
 		}
 	do
@@ -328,10 +339,10 @@ function Hud.new(gui: ScreenGui)
 			Icon = entry.Icon,
 			Caption = entry.Caption,
 			Color = entry.Color,
-			Font = Theme.Fonts.Title,
-			Size = UDim2.fromOffset(entry.Caption and 140 or 196, entry.Height),
+			Size = entry.Size,
 			LayoutOrder = order,
-			MaxTextSize = 24,
+			MaxTextSize = 17,
+			Studs = true,
 			Parent = right,
 		})
 		if entry.Key == "product:StarterPack" then
@@ -346,13 +357,13 @@ function Hud.new(gui: ScreenGui)
 		Name = "Boosts",
 		BackgroundTransparency = 1,
 		LayoutOrder = 10,
-		Size = UDim2.fromOffset(196, 110),
+		Size = UDim2.fromOffset(152, 80),
 		Parent = right,
 	}, {
 		Create("UIListLayout", {
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			HorizontalAlignment = Enum.HorizontalAlignment.Right,
-			Padding = UDim.new(0, 4),
+			Padding = UDim.new(0, 3),
 		}),
 	})
 
@@ -362,8 +373,8 @@ function Hud.new(gui: ScreenGui)
 	local actionHolder, actionScale = container({
 		Name = "ActionHolder",
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -24, 1, -24),
-		Size = UDim2.fromOffset(136, 142),
+		Position = UDim2.new(1, -18, 1, -18),
+		Size = UDim2.fromOffset(96, 100),
 		Parent = gui,
 	})
 	table.insert(hud.Scales, actionScale)
@@ -371,11 +382,11 @@ function Hud.new(gui: ScreenGui)
 		Name = "Action",
 		Text = "CHOP!",
 		Color = Theme.Colors.Red,
-		Font = Theme.Fonts.Title,
 		Size = UDim2.fromScale(1, 1),
 		CornerRadius = UDim.new(0.5, 0),
-		Depth = 8,
-		MaxTextSize = 34,
+		Depth = 6,
+		MaxTextSize = 24,
+		Studs = true,
 		Silent = true,
 		Parent = actionHolder,
 	})
@@ -401,17 +412,18 @@ function Hud.SetBoosts(hud, active: { { Icon: string, Name: string, Seconds: num
 			Text = string.format("%s %s %d:%02d", boost.Icon, boost.Name, seconds // 60, seconds % 60),
 			BackgroundTransparency = 0.1,
 			BackgroundColor3 = boost.Color,
-			Size = UDim2.fromOffset(190, 30),
+			Size = UDim2.fromOffset(150, 22),
+			StrokeThickness = 1.5,
 			Parent = list,
 		})
-		Create.Corner(UDim.new(0, 10)).Parent = pill
+		Create.Corner(UDim.new(0, 8)).Parent = pill
 		Create.Stroke(2).Parent = pill
 	end
 end
 
 function Hud.Pulse(label: GuiObject)
 	local scale = label:FindFirstChildOfClass("UIScale") or Create("UIScale", { Parent = label })
-	scale.Scale = 1.12
+	scale.Scale = 1.1
 	TweenService:Create(scale, PULSE_INFO, { Scale = 1 }):Play()
 end
 

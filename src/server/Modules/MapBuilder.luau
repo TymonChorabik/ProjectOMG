@@ -11,7 +11,8 @@
 
 	Used offline by tools/mapgen/build_map.py (baked into src/workspace/Map/*.model.json so it's
 	visible and editable in Studio) and at runtime by WorldService if Workspace.Map is missing.
-	Gameplay reads names/attributes back from the map: Zone_<Id>/Area, Item_<Id>, Egg_<Id>,
+	Gameplay reads names/attributes back from the map: Zone_<Id>/Area,
+	Zone_<Id>/Stations/Station_<n> (StationId attribute + Stand part), Item_<Id>, Egg_<Id>,
 	Lane/LaunchPad, Lane/Walls/Wall_<n>, Leaderboards/<BoardId>.
 ]]
 
@@ -347,15 +348,6 @@ local function buildDecor(root: Instance)
 		local s = rng:NextNumber(4, 9)
 		box(decor, "Rock", Vector3.new(s * 1.4, s, s), Vector3.new(x, s / 2, z), STONE[2])
 	end
-	-- Welcome sign behind spawn.
-	local board =
-		box(decor, "WelcomeBoard", Vector3.new(34, 14, 1.5), Vector3.new(0, 11, -62), Color3.fromRGB(176, 120, 70))
-	box(decor, "WelcomePostL", Vector3.new(2, 11, 2), Vector3.new(-15, 5.5, -62), Color3.fromRGB(150, 98, 56))
-	box(decor, "WelcomePostR", Vector3.new(2, 11, 2), Vector3.new(15, 5.5, -62), Color3.fromRGB(150, 98, 56))
-	surfaceText(board, Enum.NormalId.Back, {
-		{ Name = "Title", Text = "+1 KUNG FU CHOP!", Color = Color3.fromRGB(255, 210, 60), Height = 0.55 },
-		{ Name = "Hint", Text = "Train → Smash the wall → Win!", Color = WHITE, Height = 0.3 },
-	}, 30)
 end
 
 --------------------------------------------------------------------------------
@@ -391,13 +383,31 @@ local function zoneStatus(zone): (string, Color3)
 	return "UNLOCKED", Color3.fromRGB(120, 255, 120)
 end
 
-local function dummy(parent: Instance, position: Vector3, color: Color3)
-	box(parent, "DummyBase", Vector3.new(3, 0.6, 3), position + Vector3.new(0, 0.3, 0), shade(color, 0.7))
-	box(parent, "DummyPost", Vector3.new(1.6, 6, 1.6), position + Vector3.new(0, 3.6, 0), color)
-	box(parent, "DummyHead", Vector3.new(2, 1.6, 2), position + Vector3.new(0, 7.4, 0), shade(color, 1.1))
-	for _, y in { 5.4, 3.6 } do
-		box(parent, "DummyArm", Vector3.new(0.5, 0.5, 3), position + Vector3.new(0, y, -1.6), shade(color, 0.85))
+-- A wooden training dummy players can "Hold E" to train at. `side` is +1/-1: which side of the
+-- pool it stands on; the player stands between the dummy and the pool, facing the dummy.
+local function station(stations: Instance, zone, index: number, position: Vector3, side: number)
+	local model = folder(stations, "Station_" .. index, "Model")
+	model:SetAttribute("StationId", zone.Id .. "_" .. index)
+	model:SetAttribute("ZoneId", zone.Id)
+
+	local wood = shade(zone.Trim, 1.15)
+	box(model, "DummyBase", Vector3.new(3, 0.6, 3), position + Vector3.new(0, 0.3, 0), shade(wood, 0.7))
+	box(model, "DummyPost", Vector3.new(1.6, 6, 1.6), position + Vector3.new(0, 3.6, 0), wood)
+	box(model, "DummyHead", Vector3.new(2, 1.6, 2), position + Vector3.new(0, 7.4, 0), shade(wood, 1.1))
+	for _, y in { 4.6, 3.2 } do
+		-- Arms reach toward the player.
+		box(model, "DummyArm", Vector3.new(3, 0.5, 0.5), position + Vector3.new(-side * 1.6, y, 0), shade(wood, 0.85))
 	end
+
+	local standPosition = position + Vector3.new(-side * 4.2, 0, 0)
+	box(model, "Stand", Vector3.new(2.5, 0.2, 2.5), standPosition + Vector3.new(0, 0.1, 0), WHITE, {
+		CFrame = CFrame.lookAt(standPosition + Vector3.new(0, 0.1, 0), position + Vector3.new(0, 0.1, 0)),
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		Studs = false,
+	})
 end
 
 local function buildZone(zonesFolder: Instance, zone, index: number)
@@ -423,10 +433,13 @@ local function buildZone(zonesFolder: Instance, zone, index: number)
 		Transparency = if poolMaterial == Enum.Material.Neon then 0.1 else 0.15,
 		Studs = false,
 	})
-	-- Training dummies on both sides of the pool.
+	-- Training stations (wooden dummies) on both sides of the pool.
+	local stations = folder(model, "Stations")
+	local stationIndex = 0
 	for _, side in { -1, 1 } do
-		for row = 0, 2 do
-			dummy(model, Vector3.new(cx + side * 9, 0.8, ZONE.MinZ + 18 + row * 26), shade(zone.Trim, 1.15))
+		for row = 0, 3 do
+			stationIndex += 1
+			station(stations, zone, stationIndex, Vector3.new(cx + side * 10.5, 0.8, ZONE.MinZ + 16 + row * 20), side)
 		end
 	end
 	-- Entrance arch + sign.
