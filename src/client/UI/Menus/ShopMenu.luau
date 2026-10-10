@@ -18,7 +18,7 @@ local ShopMenu = {}
 local TILE = Vector2.new(140, 158)
 
 local PASSES = {
-	{ Name = "AutoChop", Color = Theme.Colors.Red },
+	{ Name = "AutoSmash", Color = Theme.Colors.Red },
 	{ Name = "DoubleStrength", Color = Color3.fromRGB(120, 200, 40) },
 	{ Name = "DoubleWins", Color = Color3.fromRGB(250, 170, 30) },
 	{ Name = "PetSlots", Color = Theme.Colors.Blue },

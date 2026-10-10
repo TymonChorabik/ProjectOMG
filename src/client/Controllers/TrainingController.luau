@@ -1,16 +1,21 @@
 --[[
 	TrainingController.luau
-	"Hold E" at a wooden dummy to train there. The character steps onto the dummy's stand,
-	faces it and punches on a loop (idle training) until you move or jump. Everyone who is
-	training is animated on every client, and the dummies wobble when they get hit.
+	Dojo training, the only way to gain Strength. "Hold E" on a training pad: the character
+	steps onto it, faces the stand and karate-chops the dojo's item (boards, bamboo, ice...)
+	over and over until you move or jump. Each chop is in step with the server's Strength gain:
+	the item shatters into the pit, "+X ⚡" pops up, and a fresh item appears.
+	Everyone who is training is animated on every client, and their items break too.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
 local Formulas = require(Shared.Formulas)
+local NumberFormat = require(Shared.NumberFormat)
 local Remotes = require(Shared.Remotes)
 
 local ClientData = require(script.Parent.Parent.ClientData)
@@ -20,27 +25,29 @@ local Popups = require(script.Parent.Parent.UI.Popups)
 
 local TrainingController = {}
 
-local WOBBLE_ANGLE = math.rad(7)
-local WOBBLE_TIME = 0.7
+local RESPAWN_DELAY = 0.28 -- a new item appears this long after the old one shatters
+local SHARD_LIFETIME = 1.3
+local MAX_SHARDS = 90 -- across all stations, so busy servers stay smooth
 
-type WobblePart = { Part: BasePart, Offset: CFrame }
+type TargetPart = { Part: BasePart, Transparency: number, CFrame: CFrame }
 type Station = {
 	Id: string,
 	Zone: any,
 	Model: Model,
 	Stand: BasePart,
+	Pad: BasePart,
 	Prompt: ProximityPrompt,
-	Pivot: Vector3,
-	Axis: Vector3,
-	Parts: { WobblePart },
-	HitAt: number,
+	Target: { TargetPart },
+	Direction: Vector3, -- pad → item, flattened (pieces fly this way, into the pit)
+	Broken: boolean,
 }
 
 local localPlayer = Players.LocalPlayer
+local rng = Random.new()
 local stations: { [string]: Station } = {}
 local animations: { [Player]: { Handle: TrainingAnimator.Handle, Character: Model, StationId: string } } = {}
-local wobbling: { [Station]: boolean } = {}
-local wobbleConnection: RBXScriptConnection? = nil
+local debrisFolder: Instance? = nil
+local liveShards = 0
 
 local currentStation: Station? = nil
 local moveConnection: RBXScriptConnection? = nil
@@ -48,36 +55,120 @@ local requesting = false
 local hinted = false
 
 --------------------------------------------------------------------------------
--- Dummy wobble
+-- Breaking the item
 --------------------------------------------------------------------------------
 
-local function updateWobble()
-	local now = os.clock()
-	for station in wobbling do
-		local t = now - station.HitAt
-		local angle = 0
-		if t < WOBBLE_TIME then
-			angle = WOBBLE_ANGLE * math.exp(-6 * t) * math.sin(t * 22)
-		else
-			wobbling[station] = nil
-		end
-		local pivot = CFrame.new(station.Pivot) * CFrame.fromAxisAngle(station.Axis, angle)
-		for _, entry in station.Parts do
-			entry.Part.CFrame = pivot * entry.Offset
-		end
+local function getDebrisFolder(): Instance
+	if debrisFolder and debrisFolder.Parent then
+		return debrisFolder
 	end
-	if next(wobbling) == nil and wobbleConnection then
-		wobbleConnection:Disconnect()
-		wobbleConnection = nil
+	local existing = workspace:FindFirstChild("LocalDebris")
+	if not existing then
+		existing = Instance.new("Folder")
+		existing.Name = "LocalDebris"
+		existing.Parent = workspace
 	end
+	debrisFolder = existing
+	return existing
 end
 
-local function hitDummy(station: Station)
-	station.HitAt = os.clock()
-	wobbling[station] = true
-	if not wobbleConnection then
-		wobbleConnection = RunService.RenderStepped:Connect(updateWobble)
+local function spawnShard(source: BasePart, transparency: number, direction: Vector3)
+	if liveShards >= MAX_SHARDS then
+		return
 	end
+	local size = source.Size
+	local shard = Instance.new("Part")
+	shard.Size = Vector3.new(
+		math.max(0.2, size.X * rng:NextNumber(0.25, 0.55)),
+		math.max(0.2, size.Y * rng:NextNumber(0.5, 0.9)),
+		math.max(0.2, size.Z * rng:NextNumber(0.2, 0.45))
+	)
+	shard.CFrame = source.CFrame
+		* CFrame.new(
+			rng:NextNumber(-0.35, 0.35) * size.X,
+			rng:NextNumber(-0.2, 0.2) * size.Y,
+			rng:NextNumber(-0.35, 0.35) * size.Z
+		)
+		* CFrame.Angles(rng:NextNumber(0, 6.28), rng:NextNumber(0, 6.28), rng:NextNumber(0, 6.28))
+	shard.Color = source.Color
+	shard.Material = source.Material
+	shard.Transparency = transparency
+	shard.Reflectance = source.Reflectance
+	shard.TopSurface = Enum.SurfaceType.Smooth
+	shard.BottomSurface = Enum.SurfaceType.Smooth
+	shard.CastShadow = false
+	shard.CanCollide = true
+	shard.CanQuery = false
+	shard.CanTouch = false
+	shard.Massless = true
+	shard.CollisionGroup = "Debris"
+	shard.Parent = getDebrisFolder()
+	local sideways = Vector3.new(-direction.Z, 0, direction.X)
+	shard.AssemblyLinearVelocity = direction * rng:NextNumber(9, 17)
+		+ sideways * rng:NextNumber(-5, 5)
+		+ Vector3.new(0, rng:NextNumber(9, 16), 0)
+	shard.AssemblyAngularVelocity = Vector3.new(rng:NextNumber(-1, 1), rng:NextNumber(-1, 1), rng:NextNumber(-1, 1))
+		* 14
+	liveShards += 1
+
+	task.delay(SHARD_LIFETIME - 0.35, function()
+		if shard.Parent then
+			TweenService:Create(shard, TweenInfo.new(0.35), { Transparency = 1, Size = shard.Size * 0.4 }):Play()
+		end
+		task.wait(0.35)
+		shard:Destroy()
+		liveShards -= 1
+	end)
+end
+
+-- Shatters the station's item into the pit and pops a fresh one back after a moment.
+local function breakTarget(station: Station, piecesPerPart: number)
+	if station.Broken then
+		return
+	end
+	station.Broken = true
+	for _, entry in station.Target do
+		for _ = 1, piecesPerPart do
+			spawnShard(entry.Part, entry.Transparency, station.Direction)
+		end
+		entry.Part.Transparency = 1
+	end
+
+	task.delay(RESPAWN_DELAY, function()
+		for _, entry in station.Target do
+			-- Drop the new item in from just above the stand.
+			entry.Part.Transparency = entry.Transparency
+			entry.Part.CFrame = entry.CFrame + Vector3.new(0, 0.7, 0)
+			TweenService:Create(
+				entry.Part,
+				TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+				{ CFrame = entry.CFrame }
+			):Play()
+		end
+		station.Broken = false
+	end)
+end
+
+--------------------------------------------------------------------------------
+-- Strength popups
+--------------------------------------------------------------------------------
+
+local function popupPosition(): Vector2
+	local camera = workspace.CurrentCamera
+	local character = localPlayer.Character
+	local head = character and character:FindFirstChild("Head")
+	if camera and head and head:IsA("BasePart") then
+		local point, visible = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 2, 0))
+		if visible then
+			return Vector2.new(point.X, point.Y)
+		end
+	end
+	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
+	return Vector2.new(size.X / 2, size.Y * 0.4)
+end
+
+local function showGain(gain: number)
+	Popups.ScreenText(popupPosition(), "⚡ +" .. NumberFormat.Abbreviate(gain), Color3.fromRGB(255, 220, 70), 26)
 end
 
 --------------------------------------------------------------------------------
@@ -100,12 +191,16 @@ local function refreshAnimation(player: Player)
 	end
 
 	local isLocal = player == localPlayer
-	local handle = TrainingAnimator.Start(character, function()
-		hitDummy(station)
-		if isLocal then
-			Sfx.Play("Smash", { Volume = 0.12, PitchVariance = 0.15 })
-		end
-	end)
+	local handle = TrainingAnimator.Start(character, {
+		-- The local player's chops follow the server's gains (ChopResult); others loop.
+		Period = if isLocal then nil else Config.Training.IdleInterval,
+		OnHit = function()
+			breakTarget(station, if isLocal then 3 else 2)
+			if isLocal then
+				Sfx.Play("Smash", { Volume = 0.25, PitchVariance = 0.15 })
+			end
+		end,
+	})
 	animations[player] = { Handle = handle, Character = character, StationId = station.Id }
 end
 
@@ -119,6 +214,18 @@ local function watchPlayer(player: Player)
 	refreshAnimation(player)
 end
 
+-- Server granted one training chop: chop now and show the gain when the hand lands.
+local function onChopResult(gain: number)
+	local animation = animations[localPlayer]
+	if animation then
+		animation.Handle.Strike(function()
+			showGain(gain)
+		end)
+	else
+		showGain(gain)
+	end
+end
+
 --------------------------------------------------------------------------------
 -- Local player
 --------------------------------------------------------------------------------
@@ -130,7 +237,8 @@ local function refreshPrompts()
 		local takenByOther = occupant ~= nil and occupant ~= localPlayer.UserId
 		station.Prompt.Enabled = not takenByOther and currentStation ~= station
 		local unlocked = data == nil or Formulas.IsZoneUnlocked(data, station.Zone.Id)
-		station.Prompt.ObjectText = if unlocked then station.Zone.Name else "🔒 " .. station.Zone.Name
+		local name = station.Zone.Breakable.Name
+		station.Prompt.ObjectText = if unlocked then name else "🔒 " .. name
 	end
 end
 
@@ -159,7 +267,7 @@ local function stopTraining(tellServer: boolean)
 	end
 end
 
--- Puts the character on the stand, facing the dummy, and watches for movement to stop.
+-- Puts the character on the pad, facing the item, and watches for movement to stop.
 local function beginTraining(station: Station)
 	local character = localPlayer.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -180,7 +288,7 @@ local function beginTraining(station: Station)
 	refreshPrompts()
 	if not hinted then
 		hinted = true
-		Popups.Toast("🥋 Training! Move or jump to stop.", "Info")
+		Popups.Toast(`🥋 Breaking {station.Zone.Breakable.Name}! Move or jump to stop.`, "Info")
 	end
 
 	moveConnection = RunService.Heartbeat:Connect(function()
@@ -220,49 +328,52 @@ end
 local function setupStation(model: Instance, zone)
 	local stationId = model:GetAttribute("StationId")
 	local stand = model:FindFirstChild("Stand")
-	local post = model:FindFirstChild("DummyPost")
-	local base = model:FindFirstChild("DummyBase")
+	local pad = model:FindFirstChild("Pad")
+	local targetModel = model:FindFirstChild("Target")
 	if
 		not model:IsA("Model")
 		or type(stationId) ~= "string"
 		or not (stand and stand:IsA("BasePart"))
-		or not (post and post:IsA("BasePart"))
-		or not (base and base:IsA("BasePart"))
+		or not (pad and pad:IsA("BasePart"))
+		or not targetModel
 	then
 		return
 	end
 
+	local target: { TargetPart } = {}
+	local center = Vector3.zero
+	for _, child in targetModel:GetChildren() do
+		if child:IsA("BasePart") then
+			table.insert(target, { Part = child, Transparency = child.Transparency, CFrame = child.CFrame })
+			center += child.Position
+		end
+	end
+	if #target == 0 then
+		return
+	end
+	center /= #target
+
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "TrainPrompt"
 	prompt.ActionText = "Train"
-	prompt.ObjectText = zone.Name
+	prompt.ObjectText = zone.Breakable.Name
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.HoldDuration = 0.5
 	prompt.MaxActivationDistance = 9
 	prompt.RequiresLineOfSight = false
-	prompt.Parent = post
+	prompt.Parent = pad
 
-	-- The dummy rocks around the top of its base, away from whoever hits it.
-	local pivot = base.Position + Vector3.new(0, base.Size.Y / 2, 0)
-	local away = Vector3.new(post.Position.X - stand.Position.X, 0, post.Position.Z - stand.Position.Z)
-	local direction = if away.Magnitude > 0.01 then away.Unit else Vector3.xAxis
-	local parts: { WobblePart } = {}
-	for _, child in model:GetChildren() do
-		if child:IsA("BasePart") and child ~= base and child ~= stand then
-			table.insert(parts, { Part = child, Offset = CFrame.new(-pivot) * child.CFrame })
-		end
-	end
-
+	local toTarget = Vector3.new(center.X - pad.Position.X, 0, center.Z - pad.Position.Z)
 	local station: Station = {
 		Id = stationId,
 		Zone = zone,
 		Model = model,
 		Stand = stand,
+		Pad = pad,
 		Prompt = prompt,
-		Pivot = pivot,
-		Axis = Vector3.yAxis:Cross(direction),
-		Parts = parts,
-		HitAt = 0,
+		Target = target,
+		Direction = if toTarget.Magnitude > 0.01 then toTarget.Unit else Vector3.xAxis,
+		Broken = false,
 	}
 	stations[stationId] = station
 
@@ -277,6 +388,8 @@ function TrainingController.IsTraining(): boolean
 end
 
 function TrainingController.Start()
+	Remotes.ChopResult.OnClientEvent:Connect(onChopResult)
+
 	task.spawn(function()
 		local map = workspace:WaitForChild("Map")
 		local zones = map:WaitForChild("TrainingZones")

@@ -27,7 +27,6 @@ local PetsMenu = require(script.Parent.Parent.UI.Menus.PetsMenu)
 local RebirthMenu = require(script.Parent.Parent.UI.Menus.RebirthMenu)
 local ShopMenu = require(script.Parent.Parent.UI.Menus.ShopMenu)
 local TrailsMenu = require(script.Parent.Parent.UI.Menus.TrailsMenu)
-local ChopController = require(script.Parent.ChopController)
 local LaneController = require(script.Parent.LaneController)
 local WorldController = require(script.Parent.WorldController)
 
@@ -171,21 +170,21 @@ function UIController.Start()
 		purchase("product:" .. productName)
 	end)
 	hud.OfferPressed:Connect(purchase)
-	hud.AutoChopPressed:Connect(function()
+	hud.AutoSmashPressed:Connect(function()
 		local data = ClientData.Data
-		if data and Formulas.HasPass(data, "AutoChop") then
-			ChopController.SetAutoChop(not ChopController.IsAutoChop())
+		if data and Formulas.HasPass(data, "AutoSmash") then
+			LaneController.SetAutoSmash(not LaneController.IsAutoSmash())
 		else
-			purchase("pass:AutoChop")
+			purchase("pass:AutoSmash")
 		end
 	end)
 
-	local function refreshAutoChop()
+	local function refreshAutoSmash()
 		local data = ClientData.Data
-		local owned = data ~= nil and Formulas.HasPass(data, "AutoChop")
-		Hud.SetAutoChop(hud, owned, ChopController.IsAutoChop())
+		local owned = data ~= nil and Formulas.HasPass(data, "AutoSmash")
+		Hud.SetAutoSmash(hud, owned, LaneController.IsAutoSmash())
 	end
-	ChopController.AutoChopChanged:Connect(refreshAutoChop)
+	LaneController.AutoSmashChanged:Connect(refreshAutoSmash)
 
 	LaneController.RunProgress:Connect(function(meters: number?)
 		hud.DistanceLabel.Visible = meters ~= nil
@@ -241,7 +240,7 @@ function UIController.Start()
 		hud.Offers["product:StarterPack"].Instance.Visible = not data.StarterPackBought
 		hud.Offers["pass:DoubleStrength"].Instance.Visible = not Formulas.HasPass(data, "DoubleStrength")
 		hud.Offers["pass:DoubleWins"].Instance.Visible = not Formulas.HasPass(data, "DoubleWins")
-		refreshAutoChop()
+		refreshAutoSmash()
 	end
 
 	ClientData.Changed:Connect(refreshStats)

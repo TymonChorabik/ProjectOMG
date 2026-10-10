@@ -12,7 +12,7 @@
 	Used offline by tools/mapgen/build_map.py (baked into src/workspace/Map/*.model.json so it's
 	visible and editable in Studio) and at runtime by WorldService if Workspace.Map is missing.
 	Gameplay reads names/attributes back from the map: Zone_<Id>/Area,
-	Zone_<Id>/Stations/Station_<n> (StationId attribute + Stand part), Item_<Id>, Egg_<Id>,
+	Zone_<Id>/Stations/Station_<n> (StationId attribute, Pad, Stand and Target), Item_<Id>, Egg_<Id>,
 	Lane/LaunchPad, Lane/Walls/Wall_<n>, Leaderboards/<BoardId>.
 ]]
 
@@ -383,31 +383,200 @@ local function zoneStatus(zone): (string, Color3)
 	return "UNLOCKED", Color3.fromRGB(120, 255, 120)
 end
 
--- A wooden training dummy players can "Hold E" to train at. `side` is +1/-1: which side of the
--- pool it stands on; the player stands between the dummy and the pool, facing the dummy.
+local CINDER = Color3.fromRGB(150, 150, 158)
+
+-- The dojo's breakable item (Config Breakable), lying along Z on top of the cinder blocks.
+-- `top` is the centre of the blocks' top face. Every part goes in `target` so the client can
+-- shatter and respawn the whole item.
+local function breakable(target: Instance, def, top: Vector3, accent: Color3)
+	local color = def.Color
+	local material = (Enum.Material :: any)[def.Material or "SmoothPlastic"]
+	local function piece(size: Vector3, offset: Vector3, extra: { [string]: any }?)
+		local props: { [string]: any } = { Material = material, Studs = false }
+		if extra then
+			for key, value in extra do
+				props[key] = value
+			end
+		end
+		return box(target, "Piece", size, top + offset, props.Color or color, props)
+	end
+
+	local kind = def.Kind
+	if kind == "Planks" then
+		piece(Vector3.new(1.8, 0.3, 3.9), Vector3.new(0, 0.15, 0))
+		piece(Vector3.new(1.8, 0.3, 3.9), Vector3.new(0, 0.47, 0), { Color = shade(color, 0.9) })
+	elseif kind == "Bamboo" then
+		for i = -1, 1 do
+			local offset = Vector3.new(i * 0.6, 0.3, 0)
+			piece(Vector3.new(3.9, 0.56, 0.56), offset, {
+				Shape = Enum.PartType.Cylinder,
+				CFrame = CFrame.new(top + offset) * CFrame.Angles(0, math.rad(90), 0),
+				Color = shade(color, 1 - math.abs(i) * 0.08),
+			})
+			for _, z in { -1.1, 1.1 } do
+				piece(Vector3.new(0.18, 0.64, 0.64), offset + Vector3.new(0, 0, z), {
+					Shape = Enum.PartType.Cylinder,
+					CFrame = CFrame.new(top + offset + Vector3.new(0, 0, z)) * CFrame.Angles(0, math.rad(90), 0),
+					Color = shade(color, 0.7),
+				})
+			end
+		end
+	elseif kind == "Ice" then
+		piece(Vector3.new(1.9, 1.3, 2.8), Vector3.new(0, 0.65, 0), { Transparency = 0.2 })
+		piece(Vector3.new(1.3, 0.2, 2.0), Vector3.new(0, 1.32, 0), { Color = WHITE, Transparency = 0.35 })
+	elseif kind == "Bricks" then
+		for layer = 0, 1 do
+			for _, z in { -0.96, 0.96 } do
+				local zz = if layer == 1 then z * 0.55 else z
+				piece(
+					Vector3.new(1.8, 0.55, if layer == 1 then 1.0 else 1.86),
+					Vector3.new(0, 0.28 + layer * 0.57, zz),
+					{
+						Color = shade(color, 1 - layer * 0.1),
+					}
+				)
+			end
+		end
+	elseif kind == "GoldBars" then
+		for _, x in { -0.47, 0.47 } do
+			piece(Vector3.new(0.84, 0.45, 2.8), Vector3.new(x, 0.23, 0), { Reflectance = 0.25 })
+		end
+		piece(Vector3.new(0.84, 0.45, 2.6), Vector3.new(0, 0.69, 0), { Reflectance = 0.25, Color = shade(color, 1.05) })
+	elseif kind == "Obsidian" then
+		piece(Vector3.new(1.9, 0.7, 3.7), Vector3.new(0, 0.35, 0))
+		-- Glowing seam across the slab.
+		piece(
+			Vector3.new(0.16, 0.72, 2.9),
+			Vector3.new(0.25, 0.37, 0),
+			{ Material = Enum.Material.Neon, Color = accent }
+		)
+		piece(
+			Vector3.new(1.0, 0.72, 0.16),
+			Vector3.new(-0.2, 0.37, 0.6),
+			{ Material = Enum.Material.Neon, Color = accent }
+		)
+	elseif kind == "Crystal" then
+		piece(
+			Vector3.new(1.8, 0.3, 3.6),
+			Vector3.new(0, 0.15, 0),
+			{ Material = Enum.Material.Slate, Color = Color3.fromRGB(30, 30, 44) }
+		)
+		for i, z in { -1.0, 0, 1.0 } do
+			local height = if i == 2 then 1.9 else 1.4
+			local offset = Vector3.new(0, 0.3 + height / 2, z)
+			piece(Vector3.new(0.7, height, 0.7), offset, {
+				CFrame = CFrame.new(top + offset) * CFrame.Angles(math.rad((i - 2) * 14), math.rad(45), 0),
+				Transparency = 0.1,
+			})
+		end
+	else
+		piece(Vector3.new(1.8, 0.6, 3.6), Vector3.new(0, 0.3, 0))
+	end
+end
+
+-- A training pad (like the throwing pads at the Stone Skipping ponds) plus the stand with the
+-- dojo's breakable. `side` is +1/-1: which side of the pit the station is on. The player stands
+-- on the pad facing the pit; broken pieces fly into the pit.
 local function station(stations: Instance, zone, index: number, position: Vector3, side: number)
 	local model = folder(stations, "Station_" .. index, "Model")
 	model:SetAttribute("StationId", zone.Id .. "_" .. index)
 	model:SetAttribute("ZoneId", zone.Id)
 
-	local wood = shade(zone.Trim, 1.15)
-	box(model, "DummyBase", Vector3.new(3, 0.6, 3), position + Vector3.new(0, 0.3, 0), shade(wood, 0.7))
-	box(model, "DummyPost", Vector3.new(1.6, 6, 1.6), position + Vector3.new(0, 3.6, 0), wood)
-	box(model, "DummyHead", Vector3.new(2, 1.6, 2), position + Vector3.new(0, 7.4, 0), shade(wood, 1.1))
-	for _, y in { 4.6, 3.2 } do
-		-- Arms reach toward the player.
-		box(model, "DummyArm", Vector3.new(3, 0.5, 0.5), position + Vector3.new(-side * 1.6, y, 0), shade(wood, 0.85))
+	-- Stand: two cinder blocks with the breakable across them.
+	for _, dz in { -1.35, 1.35 } do
+		box(model, "Block", Vector3.new(1.6, 1.6, 1.0), position + Vector3.new(0, 0.8, dz), CINDER, {
+			Material = Enum.Material.Concrete,
+			Studs = false,
+		})
+	end
+	local target = folder(model, "Target", "Model")
+	breakable(target, zone.Breakable, position + Vector3.new(0, 1.6, 0), zone.Accent)
+
+	-- Pad.
+	local padPosition = position + Vector3.new(side * 3.7, 0, 0)
+	local toTarget = Vector3.new(-side, 0, 0)
+	box(model, "Pad", Vector3.new(3.8, 0.3, 3.8), padPosition + Vector3.new(0, 0.15, 0), zone.Trim)
+	box(model, "PadInset", Vector3.new(3.0, 0.32, 3.0), padPosition + Vector3.new(0, 0.16, 0), zone.Accent, {
+		Material = Enum.Material.SmoothPlastic,
+		Studs = false,
+	})
+	-- Chevron pointing at the breakable.
+	local tip = padPosition + toTarget * 0.75 + Vector3.new(0, 0.33, 0)
+	for _, s in { -1, 1 } do
+		local armDirection = (-toTarget * math.cos(math.rad(45)) + Vector3.new(0, 0, s * math.sin(math.rad(45)))).Unit
+		local center = tip + armDirection * 0.55
+		box(model, "Arrow", Vector3.new(0.28, 0.06, 1.2), center, WHITE, {
+			CFrame = CFrame.lookAt(center, center + armDirection),
+			Material = Enum.Material.SmoothPlastic,
+			Studs = false,
+		})
 	end
 
-	local standPosition = position + Vector3.new(-side * 4.2, 0, 0)
-	box(model, "Stand", Vector3.new(2.5, 0.2, 2.5), standPosition + Vector3.new(0, 0.1, 0), WHITE, {
-		CFrame = CFrame.lookAt(standPosition + Vector3.new(0, 0.1, 0), position + Vector3.new(0, 0.1, 0)),
+	box(model, "Stand", Vector3.new(2.5, 0.2, 2.5), padPosition + Vector3.new(0, 0.1, 0), WHITE, {
+		CFrame = CFrame.lookAt(padPosition + Vector3.new(0, 0.1, 0), position + Vector3.new(0, 0.1, 0)),
 		Transparency = 1,
 		CanCollide = false,
 		CanQuery = false,
 		CanTouch = false,
 		Studs = false,
 	})
+end
+
+-- The "pond": a sunken pit down the middle of the dojo, already littered with broken pieces.
+local function pit(model: Instance, zone, index: number, cx: number, cz: number, length: number)
+	local width = 10
+	local glowing = zone.Id == "Lava" or zone.Id == "Cosmic"
+	box(
+		model,
+		"PitFloor",
+		Vector3.new(width, 0.2, length),
+		Vector3.new(cx, 0.82, cz),
+		if glowing then zone.Accent else shade(zone.Floor, 0.55),
+		{
+			Material = if glowing then Enum.Material.Neon else Enum.Material.SmoothPlastic,
+			Transparency = if glowing then 0.15 else 0,
+			Studs = false,
+		}
+	)
+	for _, s in { -1, 1 } do
+		box(
+			model,
+			"PitRim",
+			Vector3.new(0.6, 0.7, length + 0.6),
+			Vector3.new(cx + s * (width / 2), 1.15, cz),
+			zone.Trim
+		)
+		box(
+			model,
+			"PitRim",
+			Vector3.new(width + 0.6, 0.7, 0.6),
+			Vector3.new(cx, 1.15, cz + s * (length / 2)),
+			zone.Trim
+		)
+	end
+
+	local def = zone.Breakable
+	local material = (Enum.Material :: any)[def.Material or "SmoothPlastic"]
+	local rng = Random.new(index * 97)
+	for _ = 1, 34 do
+		local size = Vector3.new(rng:NextNumber(0.4, 1.2), rng:NextNumber(0.2, 0.5), rng:NextNumber(0.4, 1.4))
+		local position = Vector3.new(
+			cx + rng:NextNumber(-width / 2 + 1, width / 2 - 1),
+			0.95 + size.Y / 2,
+			cz + rng:NextNumber(-length / 2 + 1, length / 2 - 1)
+		)
+		box(model, "Rubble", size, position, shade(def.Color, rng:NextNumber(0.75, 1.05)), {
+			CFrame = CFrame.new(position) * CFrame.Angles(
+				math.rad(rng:NextNumber(-20, 20)),
+				math.rad(rng:NextNumber(0, 180)),
+				math.rad(rng:NextNumber(-20, 20))
+			),
+			Material = material,
+			Transparency = if material == Enum.Material.Ice then 0.2 else 0,
+			CanCollide = false,
+			Studs = false,
+		})
+	end
 end
 
 local function buildZone(zonesFolder: Instance, zone, index: number)
@@ -424,22 +593,15 @@ local function buildZone(zonesFolder: Instance, zone, index: number)
 		box(model, "Border", Vector3.new(2, 1.6, length), Vector3.new(cx + side * (width / 2 - 1), 0.8, cz), zone.Trim)
 		box(model, "Border", Vector3.new(width, 1.6, 2), Vector3.new(cx, 0.8, cz + side * (length / 2 - 1)), zone.Trim)
 	end
-	-- Centre pool (water / lava / neon) like the training ponds in the reference.
-	local poolMaterial = if zone.Id == "Lava" or zone.Id == "Cosmic"
-		then Enum.Material.Neon
-		else Enum.Material.SmoothPlastic
-	box(model, "Pool", Vector3.new(10, 0.3, length - 14), Vector3.new(cx, 0.9, cz + 2), zone.Accent, {
-		Material = poolMaterial,
-		Transparency = if poolMaterial == Enum.Material.Neon then 0.1 else 0.15,
-		Studs = false,
-	})
-	-- Training stations (wooden dummies) on both sides of the pool.
+	-- The "pond": a pit down the middle, like the training ponds in Stone Skipping.
+	pit(model, zone, index, cx, cz + 1, length - 14)
+	-- Training stations along both sides of the pit: pad + stand with the dojo's breakable.
 	local stations = folder(model, "Stations")
 	local stationIndex = 0
 	for _, side in { -1, 1 } do
 		for row = 0, 3 do
 			stationIndex += 1
-			station(stations, zone, stationIndex, Vector3.new(cx + side * 10.5, 0.8, ZONE.MinZ + 16 + row * 20), side)
+			station(stations, zone, stationIndex, Vector3.new(cx + side * 7.2, 0.8, ZONE.MinZ + 16 + row * 20), side)
 		end
 	end
 	-- Entrance arch + sign.

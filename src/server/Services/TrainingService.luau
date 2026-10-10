@@ -1,11 +1,9 @@
 --[[
 	TrainingService.luau
-	The +1 loop.
-	• Manual chops: clients only say "I chopped"; the server finds the player's training zone and
-	  computes the gain. A token bucket caps the rate, so autoclickers gain nothing extra.
-	• Idle training: "Hold E" at a wooden dummy (StartTraining). While the player stays on that
-	  dummy's stand they train every IdleInterval with the zone's multiplier. One player per
-	  dummy; walking off, dying, starting a run or losing access to the zone stops it.
+	The +1 loop. Strength only comes from the dojos: "Hold E" on a training pad (StartTraining).
+	While the player stays on that pad they earn one chop's Strength every IdleInterval with the
+	zone's multiplier. One player per pad; walking off, dying, starting a run or losing access to
+	the zone stops it. There is no click-to-train, so there is nothing to autoclick.
 ]]
 
 local Players = game:GetService("Players")
@@ -22,31 +20,8 @@ local WorldService = require(script.Parent.WorldService)
 
 local TrainingService = {}
 
-type Bucket = { Tokens: number, Last: number }
-
-local buckets: { [Player]: Bucket } = {}
 local occupants: { [string]: Player } = {} -- stationId -> player training there
 local playerStations: { [Player]: string } = {} -- player -> stationId
-
-local function consumeToken(player: Player): boolean
-	local training = Config.Training
-	local now = os.clock()
-	local bucket = buckets[player]
-	if not bucket then
-		bucket = { Tokens = training.ServerBucketCapacity, Last = now }
-		buckets[player] = bucket
-	end
-	bucket.Tokens = math.min(
-		training.ServerBucketCapacity,
-		bucket.Tokens + (now - bucket.Last) * training.ServerBucketRefillPerSecond
-	)
-	bucket.Last = now
-	if bucket.Tokens < 1 then
-		return false
-	end
-	bucket.Tokens -= 1
-	return true
-end
 
 local function getTrainingRoot(player: Player): BasePart?
 	if player:GetAttribute("Running") then
@@ -65,7 +40,7 @@ local function flatDistance(a: Vector3, b: Vector3): number
 	return Vector3.new(a.X - b.X, 0, a.Z - b.Z).Magnitude
 end
 
--- keepAttribute: the player is switching dummies, so don't flash "Training" to nil.
+-- keepAttribute: the player is switching pads, so don't flash "Training" to nil.
 local function stopTraining(player: Player, keepAttribute: boolean?)
 	local stationId = playerStations[player]
 	if not stationId then
@@ -100,23 +75,13 @@ local function getActiveStation(player: Player, data): WorldService.Station?
 	return station
 end
 
-local function grant(player: Player, data, zoneMultiplier: number, idle: boolean): number
+local function grant(player: Player, data, zoneMultiplier: number)
 	local friendBoost = player:GetAttribute("FriendBoost")
 	local gain =
 		Formulas.GetChopGain(data, zoneMultiplier, os.time(), if type(friendBoost) == "number" then friendBoost else 0)
 	DataService:Increment(player, "Strength", gain)
 	data.Stats.Chops += 1
-	Remotes.ChopResult:FireClient(player, gain, idle)
-	return gain
-end
-
-local function manualChop(player: Player)
-	local data = DataService:GetData(player)
-	local root = getTrainingRoot(player)
-	if data and root then
-		local zoneMultiplier = WorldService:GetZoneMultiplier(data, root.Position)
-		grant(player, data, zoneMultiplier, false)
-	end
+	Remotes.ChopResult:FireClient(player, gain)
 end
 
 local function idleTick()
@@ -128,7 +93,7 @@ local function idleTick()
 		local data = DataService:GetData(player)
 		local station = data and getActiveStation(player, data)
 		if data and station then
-			grant(player, data, station.Zone.Multiplier, true)
+			grant(player, data, station.Zone.Multiplier)
 		else
 			stopTraining(player)
 		end
@@ -139,7 +104,7 @@ function TrainingService:Init()
 	ActionService:Register("StartTraining", function(player, data, stationId)
 		local station = stationId and WorldService:GetStation(stationId)
 		if not station then
-			return ActionService.Fail("That dummy doesn't exist.")
+			return ActionService.Fail("That training pad doesn't exist.")
 		end
 		local zone = station.Zone
 		if not Formulas.IsZoneUnlocked(data, zone.Id) then
@@ -153,11 +118,11 @@ function TrainingService:Init()
 			return ActionService.Fail("You can't train right now.")
 		end
 		if flatDistance(root.Position, station.Stand.Position) > Config.Training.StationStartRange then
-			return ActionService.Fail("Get closer to the dummy!")
+			return ActionService.Fail("Get closer to the training pad!")
 		end
 		local occupant = occupants[station.Id]
 		if occupant and occupant ~= player and occupant.Parent then
-			return ActionService.Fail("Someone is already training at this dummy!")
+			return ActionService.Fail("Someone is already training on this pad!")
 		end
 
 		stopTraining(player, true)
@@ -175,12 +140,6 @@ function TrainingService:Init()
 end
 
 function TrainingService:Start()
-	Remotes.Chop.OnServerEvent:Connect(function(player)
-		if consumeToken(player) then
-			manualChop(player)
-		end
-	end)
-
 	task.spawn(function()
 		while true do
 			task.wait(Config.Training.IdleInterval)
@@ -200,7 +159,6 @@ function TrainingService:Start()
 
 	Players.PlayerRemoving:Connect(function(player)
 		stopTraining(player)
-		buckets[player] = nil
 	end)
 end
 

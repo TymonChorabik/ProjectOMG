@@ -3,8 +3,11 @@
 Train your chop, then **smash through a wall of boards** as far as your Strength takes you.
 One big studded hub, laid out like *+1 Stone Skipping*:
 
-* **Right side – training zones.** Chop for **+Strength**, or **hold E at a wooden dummy** and your
-  character punches it on its own (idle training). Better zones (x4, x10, x20) unlock with rebirths; x30 / x75 / x200 zones are Robux passes.
+* **Right side – dojos.** Like the ponds in Stone Skipping: each dojo is a long pit lined with
+  training pads. **Hold E on a pad** and your character karate-chops that dojo's item over and
+  over (wooden boards → bamboo → ice → bricks → gold bars → obsidian → star crystals); every
+  break gives **+Strength**. This is the only way to gain Strength (no clicking). Better dojos
+  (x4, x10, x20) unlock with rebirths; x30 / x75 / x200 dojos are Robux passes.
 * **Centre – the Board Wall lane.** Step on the launch pad and press **E** to smash. Your character
   flies down the lane and breaks every wall your Strength can handle through 6 biomes (Bamboo
   Grove → Autumn Temple → Frost Peak → Lava Fortress → Sky Palace → Cosmic Rift). Every broken
@@ -15,11 +18,11 @@ One big studded hub, laid out like *+1 Stone Skipping*:
   Strength. There's a Robux Rainbow Egg, a "Best in game" pet showcase, and global top-10 boards.
 * **Rebirth** at Level 40 resets Strength for a permanent multiplier and new zones.
 * Gifts (playtime rewards), "Welcome back" offline training, 2x boosts, trails, friend boost,
-  Auto Chop and a Robux shop are all included.
+  Auto Smash (automatic wall runs) and a Robux shop are all included.
 
-| Hub | Board Wall lane |
-|---|---|
-| ![Hub](docs/map/Hub.png) | ![Lane](docs/map/Lane.png) |
+| Hub | Board Wall lane | Dojos |
+|---|---|---|
+| ![Hub](docs/map/Hub.png) | ![Lane](docs/map/Lane.png) | ![Dojos](docs/map/Dojos.png) |
 
 <sub>Flat-shaded previews of `Workspace.Map` (rendered by `tools/mapgen/render_preview.py`). In Studio you see the real map with studs, lighting and effects.</sub>
 
@@ -48,8 +51,7 @@ in-memory data and shows a "progress won't be saved" message. Leaderboards also 
 
 | Action | How |
 |---|---|
-| Chop (train) | Click / tap the world, or press **F** / **R2** |
-| Idle training | Walk up to a wooden dummy and **hold E**. Move or jump to stop |
+| Train (+Strength) | Walk onto a pad in a dojo and **hold E**. Move or jump to stop |
 | Smash the wall | Stand on the yellow launch pad and press **E** (or tap the **Smash!** prompt) |
 | Equip hand items | Walk up to a pedestal and press **E**, or use **Inventory** |
 | Hatch eggs | Walk up to an egg and press **E** |
@@ -99,7 +101,7 @@ Frame, set **Image** to the stud texture, **ScaleType = Tile** and
 
 ## 💸 Robux items (placeholders)
 
-Everything in the shop is built and shown in the game: Auto Chop, 2x Strength, 2x Wins, +2 Pet
+Everything in the shop is built and shown in the game: Auto Smash, 2x Strength, 2x Wins, +2 Pet
 Slots, the three Robux training zones, Phoenix Relic, the Lion King pet, Strength packs
 (+10K / +100K / +1M), Rainbow Egg, Starter Pack and the x3 offline claim.
 
@@ -118,8 +120,8 @@ Slots, the three Robux training zones, Phoenix Relic, the Lion King pet, Strengt
 Luau code the game uses (`src/server/Modules/MapBuilder.luau`).
 
 * Edit freely in Studio. Gameplay only needs these names: `TrainingZones/Zone_<Id>/Area`,
-  `TrainingZones/Zone_<Id>/Stations/Station_<n>` (a `StationId` attribute, `DummyPost`,
-  `DummyBase` and an invisible `Stand` part facing the dummy), `Lane/LaunchPad`, `Lane/Walls/Wall_<n>`, `Items/Item_<Id>`, `Eggs/Egg_<Id>`, `Showcase` and
+  `TrainingZones/Zone_<Id>/Stations/Station_<n>` (a `StationId` attribute, a `Pad`, an
+  invisible `Stand` part facing the item, and a `Target` model holding the breakable item), `Lane/LaunchPad`, `Lane/Walls/Wall_<n>`, `Items/Item_<Id>`, `Eggs/Egg_<Id>`, `Showcase` and
   `Leaderboards/<BoardId>/Panel`.
 * If `Workspace.Map` is deleted, the server rebuilds it at startup.
 * After changing zones, items, eggs or biomes in Config, re-bake with
@@ -143,7 +145,7 @@ src/shared/            → ReplicatedStorage.Shared
 src/server/            → ServerScriptService.Server
   Services/DataService         session-locked DataStore profiles, autosave, replication
   Services/WorldService        loads Workspace.Map, lighting, zone detection
-  Services/TrainingService     manual chops (rate limited) + Hold-E dummy training
+  Services/TrainingService     Hold-E dojo training (the only Strength source)
   Services/LaneService         board wall runs: walls broken, distance, wins
   Services/PetService          eggs, hatching, equip / delete
   Services/ProgressService     wins, hand items, trails, rebirth
@@ -155,8 +157,8 @@ src/server/            → ServerScriptService.Server
   Services/ActionService       one validated remote for every player request
   Modules/MapBuilder           builds the hub (used offline by the baker + as a fallback)
 src/client/            → StarterPlayerScripts.Client
-  Controllers/ChopController   chop input, Auto Chop
-  Controllers/TrainingController Hold-E dummies: stand, punch loop, dummy wobble
+  Controllers/ChopController   keeps the chop animation bound (used by wall runs)
+  Controllers/TrainingController Hold-E pads: chop loop in step with the server, items shatter
   Controllers/LaneController   the wall run: flight, shattering walls, camera, distance
   Controllers/PetController    everyone's pets following them
   Controllers/WorldController  pedestal / egg / showcase prompts, live signs
@@ -170,8 +172,9 @@ tools/                 stud texture generator, map baker + preview renderer,
 tests/                 offline Luau unit tests for the game math
 ```
 
-**Security:** the client only ever says "I chopped", "start my run" or "I'd like to buy/equip X".
-The server computes every number, rate-limits chops, checks you're on the pad, validates
+**Security:** the client only ever says "train at this pad", "start my run" or "I'd like to
+buy/equip X". The server computes every number, checks you're standing on your pad / the launch
+pad, validates
 ownership, prices and unlocks on every request, and grants Robux products idempotently.
 
 ## 🛠️ Development

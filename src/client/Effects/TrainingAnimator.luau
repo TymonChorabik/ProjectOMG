@@ -1,10 +1,15 @@
 --[[
 	TrainingAnimator.luau
-	Idle training loop: a guard stance with alternating left/right punches, driven
-	procedurally on the arm/waist Motor6D C0s every frame. Works on any character, so every
-	client animates everyone who is training (C0 changes don't replicate on their own).
+	Dojo training motion: a ready stance, then karate chops straight down onto the item on the
+	stand, alternating hands (wind up high → chop down → recover). Driven procedurally on the
+	arm/waist Motor6D C0s every frame, and works on any character, so every client animates
+	everyone who is training (C0 changes don't replicate on their own).
 
-		local handle = TrainingAnimator.Start(character, function(side) ... end) -- side 1 = right
+		-- Loop: chops every `Period` seconds (other players).
+		local handle = TrainingAnimator.Start(character, { Period = 0.6, OnHit = function(side) end })
+		-- Manual: one chop per Strike() (the local player, in step with the server's gains).
+		local handle = TrainingAnimator.Start(character, { OnHit = ... })
+		handle.Strike(onImpact)  -- onImpact runs when the hand lands
 		handle.Stop()
 ]]
 
@@ -12,21 +17,41 @@ local RunService = game:GetService("RunService")
 
 local TrainingAnimator = {}
 
-local PUNCH_PERIOD = 0.5 -- seconds per punch; hands alternate
-local EXTEND = 0.3 -- fraction of the period spent throwing the punch (the hit lands here)
-local HOLD = 0.45 -- ...then hold until this fraction, then pull back to guard
+local CHOP_TIME = 0.5 -- manual chop length
+local WINDUP_END = 0.48 -- fraction of a chop spent winding up...
+local STRIKE_END = 0.66 -- ...then chopping down: the hit lands here
+local HOLD_END = 0.76 -- ...a short hold, then back to the ready stance
 local BLEND_IN = 0.2 -- seconds to raise the guard
 
-type Joint = { Motor: Motor6D, Rest: CFrame, Guard: CFrame, Punch: CFrame, Side: number }
+type Joint = {
+	Motor: Motor6D,
+	Rest: CFrame,
+	Guard: CFrame,
+	Windup: CFrame,
+	Strike: CFrame,
+	Side: number, -- 1 right arm, -1 left arm, 0 waist
+}
+
 type Rig = {
 	Character: Model,
 	Joints: { Joint },
 	Started: number,
-	LastHitCycle: number,
+	Period: number?,
 	OnHit: ((side: number) -> ())?,
+	-- loop mode
+	LastHitCycle: number,
+	-- manual mode
+	ChopStart: number?,
+	ChopSide: number,
+	ChopHit: boolean,
+	Impact: (() -> ())?,
 }
 
-export type Handle = { Stop: () -> () }
+export type Handle = {
+	Stop: () -> (),
+	Strike: (onImpact: (() -> ())?) -> (),
+}
+export type Options = { Period: number?, OnHit: ((side: number) -> ())? }
 
 local rigs: { Rig } = {}
 local connection: RBXScriptConnection? = nil
@@ -54,37 +79,92 @@ end
 
 local function buildJoints(character: Model, isR6: boolean): { Joint }
 	local joints: { Joint } = {}
-	local function add(motor: Motor6D?, guard: CFrame, punch: CFrame, side: number)
+	local function add(motor: Motor6D?, guard: CFrame, windup: CFrame, strike: CFrame, side: number)
 		if motor then
-			table.insert(joints, { Motor = motor, Rest = restC0(motor), Guard = guard, Punch = punch, Side = side })
+			table.insert(joints, {
+				Motor = motor,
+				Rest = restC0(motor),
+				Guard = guard,
+				Windup = windup,
+				Strike = strike,
+				Side = side,
+			})
 		end
 	end
 
 	if isR6 then
 		-- R6 shoulder frames are rotated 90° about Y: Z swings the arm forward (mirrored on the left).
-		add(findMotor(character, "Torso", "Right Shoulder"), angles(0, 0, 75), angles(0, 0, 95), 1)
-		add(findMotor(character, "Torso", "Left Shoulder"), angles(0, 0, -75), angles(0, 0, -95), -1)
+		local right = findMotor(character, "Torso", "Right Shoulder")
+		local left = findMotor(character, "Torso", "Left Shoulder")
+		add(right, angles(0, 0, 45), angles(0, 0, 170), angles(0, 0, 70), 1)
+		add(left, angles(0, 0, -45), angles(0, 0, -170), angles(0, 0, -70), -1)
 	else
-		-- Guard: upper arms forward-down, forearms up by the chin. Punch: arm straight out.
-		add(findMotor(character, "RightUpperArm", "RightShoulder"), angles(55, 0, -10), angles(88, 0, -12), 1)
-		add(findMotor(character, "RightLowerArm", "RightElbow"), angles(95, 0, 0), angles(8, 0, 0), 1)
-		add(findMotor(character, "LeftUpperArm", "LeftShoulder"), angles(55, 0, 10), angles(88, 0, 12), -1)
-		add(findMotor(character, "LeftLowerArm", "LeftElbow"), angles(95, 0, 0), angles(8, 0, 0), -1)
-		-- Waist twists into each punch.
-		add(findMotor(character, "UpperTorso", "Waist"), CFrame.identity, angles(0, 20, 0), 0)
+		-- Ready: hands up in front of the chest. Wind-up: arm high above the head.
+		-- Chop: arm straight down onto the item on the stand.
+		add(
+			findMotor(character, "RightUpperArm", "RightShoulder"),
+			angles(40, 0, -8),
+			angles(165, 0, 12),
+			angles(58, 0, -6),
+			1
+		)
+		add(findMotor(character, "RightLowerArm", "RightElbow"), angles(75, 0, 0), angles(45, 0, 0), angles(4, 0, 0), 1)
+		add(
+			findMotor(character, "LeftUpperArm", "LeftShoulder"),
+			angles(40, 0, 8),
+			angles(165, 0, -12),
+			angles(58, 0, 6),
+			-1
+		)
+		add(findMotor(character, "LeftLowerArm", "LeftElbow"), angles(75, 0, 0), angles(45, 0, 0), angles(4, 0, 0), -1)
+		-- Waist leans back on the wind-up and forward into the chop (twist mirrored per hand).
+		add(findMotor(character, "UpperTorso", "Waist"), CFrame.identity, angles(6, -12, 0), angles(-16, 10, 0), 0)
 	end
 	return joints
 end
 
-local function punchAlpha(phase: number): number
-	if phase < EXTEND then
-		local t = phase / EXTEND
-		return 1 - (1 - t) * (1 - t) -- ease out
-	elseif phase < HOLD then
-		return 1
+local function easeOut(t: number): number
+	return 1 - (1 - t) * (1 - t)
+end
+
+local function easeIn(t: number): number
+	return t * t
+end
+
+local function smooth(t: number): number
+	return t * t * (3 - 2 * t)
+end
+
+-- Pose of one joint `phase` (0..1) into a chop with the `side` hand (nil = just the stance).
+local function pose(joint: Joint, phase: number?, side: number): CFrame
+	local guard, windup, strike = joint.Guard, joint.Windup, joint.Strike
+	if joint.Side == 0 and side == -1 then
+		-- Mirror the waist twist for the left hand.
+		windup = angles(6, 12, 0)
+		strike = angles(-16, -10, 0)
 	end
-	local t = (phase - HOLD) / (1 - HOLD)
-	return 1 - t * t * (3 - 2 * t) -- smoothstep back to guard
+	if phase == nil or (joint.Side ~= 0 and joint.Side ~= side) then
+		return guard
+	end
+	if phase < WINDUP_END then
+		return guard:Lerp(windup, easeOut(phase / WINDUP_END))
+	elseif phase < STRIKE_END then
+		return windup:Lerp(strike, easeIn((phase - WINDUP_END) / (STRIKE_END - WINDUP_END)))
+	elseif phase < HOLD_END then
+		return strike
+	end
+	return strike:Lerp(guard, smooth((phase - HOLD_END) / (1 - HOLD_END)))
+end
+
+local function hit(rig: Rig, side: number)
+	if rig.OnHit then
+		task.spawn(rig.OnHit, side)
+	end
+	local impact = rig.Impact
+	rig.Impact = nil
+	if impact then
+		task.spawn(impact)
+	end
 end
 
 local function update()
@@ -98,28 +178,32 @@ local function update()
 
 		local elapsed = now - rig.Started
 		local blend = math.min(1, elapsed / BLEND_IN)
-		local cycle = math.floor(elapsed / PUNCH_PERIOD)
-		local phase = (elapsed % PUNCH_PERIOD) / PUNCH_PERIOD
-		local side = if cycle % 2 == 0 then 1 else -1
-		local alpha = punchAlpha(phase)
+		local phase: number? = nil
+		local side = 1
 
-		for _, joint in rig.Joints do
-			local pose
-			if joint.Side == 0 then
-				pose = CFrame.identity:Lerp(if side == 1 then joint.Punch else joint.Punch:Inverse(), alpha)
-			elseif joint.Side == side then
-				pose = joint.Guard:Lerp(joint.Punch, alpha)
-			else
-				pose = joint.Guard
+		if rig.Period then
+			local cycle = math.floor(elapsed / rig.Period)
+			phase = (elapsed % rig.Period) / rig.Period
+			side = if cycle % 2 == 0 then 1 else -1
+			if (phase :: number) >= STRIKE_END and cycle ~= rig.LastHitCycle then
+				rig.LastHitCycle = cycle
+				hit(rig, side)
 			end
-			joint.Motor.C0 = joint.Rest:Lerp(joint.Rest * pose, blend)
+		elseif rig.ChopStart then
+			side = rig.ChopSide
+			phase = (now - rig.ChopStart) / CHOP_TIME
+			if (phase :: number) >= STRIKE_END and not rig.ChopHit then
+				rig.ChopHit = true
+				hit(rig, side)
+			end
+			if (phase :: number) >= 1 then
+				rig.ChopStart = nil
+				phase = nil
+			end
 		end
 
-		if phase >= EXTEND and cycle ~= rig.LastHitCycle then
-			rig.LastHitCycle = cycle
-			if rig.OnHit then
-				task.spawn(rig.OnHit, side)
-			end
+		for _, joint in rig.Joints do
+			joint.Motor.C0 = joint.Rest:Lerp(joint.Rest * pose(joint, phase, side), blend)
 		end
 	end
 
@@ -129,14 +213,19 @@ local function update()
 	end
 end
 
-function TrainingAnimator.Start(character: Model, onHit: ((side: number) -> ())?): Handle
+function TrainingAnimator.Start(character: Model, options: Options?): Handle
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local rig: Rig = {
 		Character = character,
 		Joints = buildJoints(character, humanoid ~= nil and humanoid.RigType == Enum.HumanoidRigType.R6),
 		Started = os.clock(),
+		Period = options and options.Period,
+		OnHit = options and options.OnHit,
 		LastHitCycle = -1,
-		OnHit = onHit,
+		ChopStart = nil,
+		ChopSide = -1,
+		ChopHit = false,
+		Impact = nil,
 	}
 	table.insert(rigs, rig)
 	if not connection then
@@ -144,23 +233,45 @@ function TrainingAnimator.Start(character: Model, onHit: ((side: number) -> ())?
 	end
 
 	local stopped = false
-	return {
-		Stop = function()
-			if stopped then
-				return
+	local function stop()
+		if stopped then
+			return
+		end
+		stopped = true
+		local index = table.find(rigs, rig)
+		if index then
+			table.remove(rigs, index)
+		end
+		for _, joint in rig.Joints do
+			if joint.Motor.Parent then
+				joint.Motor.C0 = joint.Rest
 			end
-			stopped = true
-			local index = table.find(rigs, rig)
-			if index then
-				table.remove(rigs, index)
+		end
+		local impact = rig.Impact
+		rig.Impact = nil
+		if impact then
+			task.spawn(impact)
+		end
+	end
+
+	local function strike(onImpact: (() -> ())?)
+		if stopped then
+			if onImpact then
+				task.spawn(onImpact)
 			end
-			for _, joint in rig.Joints do
-				if joint.Motor.Parent then
-					joint.Motor.C0 = joint.Rest
-				end
-			end
-		end,
-	}
+			return
+		end
+		-- A chop still in the air lands now so its popup isn't lost.
+		if rig.ChopStart and not rig.ChopHit then
+			hit(rig, rig.ChopSide)
+		end
+		rig.ChopStart = os.clock()
+		rig.ChopSide = -rig.ChopSide
+		rig.ChopHit = false
+		rig.Impact = onImpact
+	end
+
+	return { Stop = stop, Strike = strike }
 end
 
 return TrainingAnimator

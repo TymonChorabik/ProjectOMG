@@ -13,14 +13,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
-local Formulas = require(Shared.Formulas)
 
 local MapBuilder = require(script.Parent.Parent.Modules.MapBuilder)
 
 local WorldService = {}
 
 type ZoneArea = { Zone: any, Area: BasePart }
--- A wooden dummy players "Hold E" at; they train standing on Stand, facing the dummy.
+-- A dojo training pad players "Hold E" on; they train standing on Stand, facing the item.
 export type Station = { Id: string, Zone: any, Model: Model, Stand: BasePart }
 
 local zones: { ZoneArea } = {}
@@ -95,15 +94,6 @@ function WorldService:GetZoneAt(position: Vector3)
 		end
 	end
 	return nil
-end
-
--- Zone multiplier for a player standing at `position` (1 outside zones or in locked ones).
-function WorldService:GetZoneMultiplier(data, position: Vector3): (number, any)
-	local zone = self:GetZoneAt(position)
-	if zone and Formulas.IsZoneUnlocked(data, zone.Id) then
-		return zone.Multiplier, zone
-	end
-	return 1, zone
 end
 
 function WorldService:GetStation(stationId: string): Station?

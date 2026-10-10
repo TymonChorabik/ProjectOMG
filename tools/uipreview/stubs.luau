@@ -82,23 +82,16 @@ STUB_MODULES["StarterPlayer/StarterPlayerScripts/Client/Effects/Sfx"] = function
 	return { Play = function() end, Preload = function() end }
 end
 
-STUB_MODULES["StarterPlayer/StarterPlayerScripts/Client/Controllers/ChopController"] = function()
-	local Signal = require(game:GetService("ReplicatedStorage").Shared.Signal)
-	return {
-		AutoChopChanged = Signal.new(),
-		IsAutoChop = function()
-			return false
-		end,
-		SetAutoChop = function() end,
-		Chop = function() end,
-	}
-end
-
 STUB_MODULES["StarterPlayer/StarterPlayerScripts/Client/Controllers/LaneController"] = function()
 	local Signal = require(game:GetService("ReplicatedStorage").Shared.Signal)
 	return {
 		PadChanged = Signal.new(),
 		RunProgress = Signal.new(),
+		AutoSmashChanged = Signal.new(),
+		IsAutoSmash = function()
+			return false
+		end,
+		SetAutoSmash = function() end,
 		IsOnPad = function()
 			return false
 		end,

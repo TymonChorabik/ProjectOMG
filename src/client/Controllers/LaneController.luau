@@ -6,6 +6,7 @@
 	  flying-kick pose, every wall it can break shatters into stud chunks (locally), the camera
 	  follows, a distance counter ticks up and biome banners pop as you enter each biome.
 	• You stop at the first wall you're too weak for (clang!), get your Wins, and return to the pad.
+	• Auto Smash (game pass): while switched on, standing on the pad starts the next run by itself.
 ]]
 
 local Debris = game:GetService("Debris")
@@ -22,6 +23,7 @@ local Remotes = require(Shared.Remotes)
 local Signal = require(Shared.Signal)
 local StudSurface = require(Shared.StudSurface)
 
+local ClientData = require(script.Parent.Parent.ClientData)
 local CameraShake = require(script.Parent.Parent.Effects.CameraShake)
 local ChopAnimator = require(script.Parent.Parent.Effects.ChopAnimator)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -31,6 +33,7 @@ local LaneController = {}
 
 LaneController.PadChanged = Signal.new() -- (onPad: boolean)
 LaneController.RunProgress = Signal.new() -- (meters: number?)  nil = run finished
+LaneController.AutoSmashChanged = Signal.new() -- (enabled: boolean)
 
 local localPlayer = Players.LocalPlayer
 
@@ -39,6 +42,8 @@ local walls: { [number]: Model } = {}
 local debrisFolder: Folder
 local onPad = false
 local running = false
+local autoSmash = false
+local lastRunEnded = 0
 
 type Hidden = { Part: Instance, Transparency: number?, CanCollide: boolean?, Enabled: boolean? }
 local hidden: { Hidden } = {}
@@ -276,8 +281,34 @@ function LaneController.TryRun()
 				LaneController.RunProgress:Fire(nil)
 			end
 		end
+		lastRunEnded = os.clock()
 		running = false
 	end)
+end
+
+function LaneController.IsAutoSmash(): boolean
+	return autoSmash
+end
+
+function LaneController.SetAutoSmash(enabled: boolean)
+	if autoSmash == enabled then
+		return
+	end
+	autoSmash = enabled
+	LaneController.AutoSmashChanged:Fire(enabled)
+	if enabled and not onPad then
+		Popups.Toast("Auto Smash is on: stand on the launch pad!", "Info")
+	end
+end
+
+local function autoSmashReady(): boolean
+	local data = ClientData.Data
+	return autoSmash
+		and onPad
+		and not running
+		and os.clock() - lastRunEnded >= Config.AutoSmash.Delay
+		and data ~= nil
+		and Formulas.HasPass(data, "AutoSmash")
 end
 
 --------------------------------------------------------------------------------
@@ -330,6 +361,9 @@ function LaneController.Start()
 			if now ~= onPad then
 				onPad = now
 				LaneController.PadChanged:Fire(onPad)
+			end
+			if autoSmashReady() then
+				LaneController.TryRun()
 			end
 		end
 	end)

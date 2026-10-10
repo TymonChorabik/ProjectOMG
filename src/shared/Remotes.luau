@@ -3,14 +3,13 @@
 	Single source of truth for networking. The server creates the instances; clients wait for them.
 
 	Client -> Server
-		Chop (RemoteEvent)            ()  -- one manual chop (server finds your training zone)
 		StartRun (RemoteFunction)     () -> { ok, message?, Walls, Distance, Wins, Duration }
 		Action (RemoteFunction)       (action: string, arg: string?) -> { ok: boolean, message: string?, ... }
 		RequestData (RemoteFunction)  () -> profile snapshot
 
 	Server -> Client
 		DataSync (RemoteEvent)        (changes: { [string]: any })
-		ChopResult (RemoteEvent)      (gain: number, idle: boolean)
+		ChopResult (RemoteEvent)      (gain: number)  -- one training chop at your dojo station
 		Hatched (RemoteEvent)         (eggId: string, petId: string, uid: string)
 		Notify (RemoteEvent)          (message: string, kind: "Info" | "Success" | "Error")
 ]]
@@ -21,7 +20,6 @@ local RunService = game:GetService("RunService")
 local FOLDER_NAME = "Remotes"
 
 local DEFINITIONS = {
-	Chop = "RemoteEvent",
 	StartRun = "RemoteFunction",
 	Action = "RemoteFunction",
 	RequestData = "RemoteFunction",
@@ -54,7 +52,6 @@ else
 end
 
 local Remotes = {
-	Chop = folder:WaitForChild("Chop") :: RemoteEvent,
 	StartRun = folder:WaitForChild("StartRun") :: RemoteFunction,
 	Action = folder:WaitForChild("Action") :: RemoteFunction,
 	RequestData = folder:WaitForChild("RequestData") :: RemoteFunction,

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Render quick isometric previews of the baked map (src/workspace/Map/*.model.json) so you
-can eyeball the layout without opening Studio. Writes docs/map/Hub.png and docs/map/Lane.png.
+can eyeball the layout without opening Studio. Writes docs/map/Hub.png, Lane.png and Dojos.png.
 
     python3 tools/mapgen/render_preview.py      (needs Pillow + numpy)
 
@@ -22,6 +22,7 @@ MAP_DIR = os.path.join(ROOT, "src", "workspace", "Map")
 VIEWS = {
     "Hub": (-360, 270, -190, 130),
     "Lane": (-150, 150, 40, 1000),
+    "Dojos": (-222, -68, -42, 64),
 }
 OUT_DIR = os.path.join(ROOT, "docs", "map")
 

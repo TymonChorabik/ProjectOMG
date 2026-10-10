@@ -4,8 +4,9 @@
 	Shared by the server (authoritative math), the client (display) and the map baker.
 
 	Game loop (one big studded hub, like +1 Stone Skipping):
-	  1. Train  – chop in the training zones (right side). Every chop gives +Strength; "Hold E" at
-	              a wooden dummy to train idly. Better zones unlock with rebirths or Robux.
+	  1. Train  – "Hold E" on a pad in a dojo (right side): your character breaks that dojo's item
+	              (boards, bamboo, ice, bricks...) over and over for +Strength. This is the only
+	              way to gain Strength. Better dojos unlock with rebirths or Robux.
 	  2. Smash  – step on the launch pad and charge down the Board Wall lane. You break every wall
 	              your Strength can handle; each broken wall pays Wins.
 	  3. Equip  – Wins unlock better hand wraps / gauntlets (left side) that add more per chop.
@@ -66,23 +67,25 @@ Config.Assets = {
 --------------------------------------------------------------------------------
 
 Config.Training = {
-	-- Manual chops (click / tap / CHOP button) are capped client-side to this interval.
-	ClientMinInterval = 0.15,
-	-- Server token bucket: excess chop requests are silently dropped.
-	ServerBucketCapacity = 10,
-	ServerBucketRefillPerSecond = 8,
-	-- "Hold E" at a wooden dummy to train there idly: one chop's Strength every IdleInterval
-	-- seconds while you stay on the dummy's stand (within StationRange studs).
-	IdleInterval = 1,
+	-- Strength only comes from the dojos: "Hold E" on a training pad and your character breaks
+	-- the zone's item (boards, bamboo, ice...) over and over. Every IdleInterval seconds you
+	-- earn one chop's Strength while you stay on the pad (within StationRange studs).
+	IdleInterval = 0.6,
 	StationRange = 5,
-	-- How far from the stand the server still accepts StartTraining (prompt reach + lag).
+	-- How far from the pad the server still accepts StartTraining (prompt reach + lag).
 	StationStartRange = 16,
-	-- Auto Chop game pass: the client chops for you at this interval.
-	AutoChopInterval = 0.25,
 }
 
--- Training zones, laid out side by side on the right of the hub (see MapBuilder).
--- Unlock with rebirths (RequiredRebirths) or a game pass (Pass).
+-- Auto Smash game pass: while it's switched on and you stand on the launch pad, a new wall run
+-- starts automatically this many seconds after the last one ends.
+Config.AutoSmash = {
+	Delay = 1.5,
+}
+
+-- Training zones (dojos), laid out side by side on the right of the hub (see MapBuilder).
+-- Unlock with rebirths (RequiredRebirths) or a game pass (Pass). Like the ponds in Stone
+-- Skipping, each dojo is a long pit lined with training pads; on each pad you break the dojo's
+-- Breakable over and over (Kind picks the model in MapBuilder, Material is an Enum.Material name).
 Config.TrainingZones = {
 	{
 		Id = "Wooden",
@@ -92,6 +95,12 @@ Config.TrainingZones = {
 		Floor = Color3.fromRGB(226, 170, 96),
 		Trim = Color3.fromRGB(150, 98, 52),
 		Accent = Color3.fromRGB(110, 210, 255),
+		Breakable = {
+			Name = "Wooden Boards",
+			Kind = "Planks",
+			Color = Color3.fromRGB(240, 206, 150),
+			Material = "Wood",
+		},
 	},
 	{
 		Id = "Bamboo",
@@ -101,6 +110,12 @@ Config.TrainingZones = {
 		Floor = Color3.fromRGB(70, 200, 150),
 		Trim = Color3.fromRGB(30, 140, 100),
 		Accent = Color3.fromRGB(170, 255, 140),
+		Breakable = {
+			Name = "Bamboo",
+			Kind = "Bamboo",
+			Color = Color3.fromRGB(140, 205, 80),
+			Material = "SmoothPlastic",
+		},
 	},
 	{
 		Id = "Waterfall",
@@ -110,6 +125,7 @@ Config.TrainingZones = {
 		Floor = Color3.fromRGB(150, 110, 255),
 		Trim = Color3.fromRGB(100, 70, 200),
 		Accent = Color3.fromRGB(110, 230, 255),
+		Breakable = { Name = "Ice Blocks", Kind = "Ice", Color = Color3.fromRGB(170, 222, 255), Material = "Ice" },
 	},
 	{
 		Id = "Lava",
@@ -119,6 +135,7 @@ Config.TrainingZones = {
 		Floor = Color3.fromRGB(240, 240, 250),
 		Trim = Color3.fromRGB(200, 200, 215),
 		Accent = Color3.fromRGB(255, 110, 40),
+		Breakable = { Name = "Bricks", Kind = "Bricks", Color = Color3.fromRGB(196, 72, 52), Material = "Brick" },
 	},
 	{
 		Id = "Golden",
@@ -128,6 +145,7 @@ Config.TrainingZones = {
 		Floor = Color3.fromRGB(70, 110, 220),
 		Trim = Color3.fromRGB(200, 70, 60),
 		Accent = Color3.fromRGB(255, 200, 60),
+		Breakable = { Name = "Gold Bars", Kind = "GoldBars", Color = Color3.fromRGB(255, 196, 40), Material = "Foil" },
 	},
 	{
 		Id = "Dragon",
@@ -137,6 +155,7 @@ Config.TrainingZones = {
 		Floor = Color3.fromRGB(255, 200, 40),
 		Trim = Color3.fromRGB(200, 140, 20),
 		Accent = Color3.fromRGB(255, 80, 60),
+		Breakable = { Name = "Obsidian", Kind = "Obsidian", Color = Color3.fromRGB(42, 32, 50), Material = "Slate" },
 	},
 	{
 		Id = "Cosmic",
@@ -146,6 +165,12 @@ Config.TrainingZones = {
 		Floor = Color3.fromRGB(24, 26, 34),
 		Trim = Color3.fromRGB(40, 255, 120),
 		Accent = Color3.fromRGB(40, 255, 120),
+		Breakable = {
+			Name = "Star Crystals",
+			Kind = "Crystal",
+			Color = Color3.fromRGB(60, 255, 150),
+			Material = "Neon",
+		},
 	},
 }
 
@@ -631,7 +656,13 @@ Config.Monetization = {
 	StudioTestPurchases = true,
 
 	GamePasses = {
-		AutoChop = { Id = 0, Price = 25, Name = "Auto Chop", Icon = "🤖", Description = "Chops for you nonstop" },
+		AutoSmash = {
+			Id = 0,
+			Price = 25,
+			Name = "Auto Smash",
+			Icon = "🤖",
+			Description = "Smashes the wall for you nonstop",
+		},
 		DoubleStrength = {
 			Id = 0,
 			Price = 49,

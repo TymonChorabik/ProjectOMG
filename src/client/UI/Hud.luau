@@ -5,7 +5,7 @@
 	• Left         – 2x3 menu tiles: Shop, Rebirth (+%), Pets, Trails, Inventory, Gifts
 	• Bottom-left  – rebirths, wins, friend boost
 	• Bottom       – ⚡ Strength + multiplier, studded Level bar, and under it the +10K / +100K /
-	                 +1M Strength packs plus AUTO CHOP (an on/off toggle once owned)
+	                 +1M Strength packs plus AUTO SMASH (an on/off toggle once owned)
 	• Top          – run distance (during a wall run)
 	• Right        – Starter Pack, 2x Strength, 2x Wins offers + active boost timers
 ]]
@@ -164,7 +164,7 @@ function Hud.new(gui: ScreenGui)
 		MenuPressed = Signal.new(), -- (name)
 		PackPressed = Signal.new(), -- (productName)
 		OfferPressed = Signal.new(), -- ("pass:X" | "product:X")
-		AutoChopPressed = Signal.new(),
+		AutoSmashPressed = Signal.new(),
 	}
 
 	----------------------------------------------------------------------------
@@ -340,7 +340,7 @@ function Hud.new(gui: ScreenGui)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	-- Three packs + AUTO CHOP share the row under the level bar.
+	-- Three packs + AUTO SMASH share the row under the level bar.
 	local packWidth = math.floor((BOTTOM_WIDTH - 36) / 4)
 	for order, entry in
 		{
@@ -389,12 +389,12 @@ function Hud.new(gui: ScreenGui)
 		hud.StrengthPacks[entry.Product] = button
 	end
 
-	hud.AutoChopButton = offerButton({
-		Name = "AutoChop",
-		Title = "AUTO CHOP",
+	hud.AutoSmashButton = offerButton({
+		Name = "AutoSmash",
+		Title = "AUTO SMASH",
 		Color = Theme.Colors.Red,
 		Size = UDim2.fromOffset(packWidth, 74),
-		Price = Config.Monetization.GamePasses.AutoChop.Price,
+		Price = Config.Monetization.GamePasses.AutoSmash.Price,
 		LayoutOrder = 4,
 		MaxTextSize = 28,
 		Parent = packs,
@@ -406,10 +406,10 @@ function Hud.new(gui: ScreenGui)
 		Size = UDim2.fromOffset(48, 48),
 		Rotation = 12,
 		ZIndex = 9,
-		Parent = hud.AutoChopButton.Instance,
+		Parent = hud.AutoSmashButton.Instance,
 	})
-	hud.AutoChopButton.Activated:Connect(function()
-		hud.AutoChopPressed:Fire()
+	hud.AutoSmashButton.Activated:Connect(function()
+		hud.AutoSmashPressed:Fire()
 	end)
 
 	----------------------------------------------------------------------------
@@ -519,16 +519,16 @@ function Hud.SetLevel(hud, level: number, progress: number, rightText: string, m
 	StudPanel.SetColor(hud._levelPlastic, if maxed then Theme.Colors.Green else Theme.Colors.Blue)
 end
 
--- AUTO CHOP button: Robux offer ("ONLY R$25") until owned, then an ON / OFF toggle.
-function Hud.SetAutoChop(hud, owned: boolean, on: boolean)
-	local button = hud.AutoChopButton
+-- AUTO SMASH button: Robux offer ("ONLY R$25") until owned, then an ON / OFF toggle.
+function Hud.SetAutoSmash(hud, owned: boolean, on: boolean)
+	local button = hud.AutoSmashButton
 	if owned then
 		button.PriceLabel.Text = if on
 			then `<font color="{hex(Theme.Colors.GreenText)}">ON</font>`
 			else `<font color="{hex(Color3.fromRGB(255, 110, 110))}">OFF</font>`
 		button:SetColor(if on then Theme.Colors.Green else Theme.Colors.GrayDark)
 	else
-		button.PriceLabel.Text = onlyPrice(Config.Monetization.GamePasses.AutoChop.Price)
+		button.PriceLabel.Text = onlyPrice(Config.Monetization.GamePasses.AutoSmash.Price)
 		button:SetColor(Theme.Colors.Red)
 	end
 end
