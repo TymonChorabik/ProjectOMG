@@ -853,8 +853,14 @@ def draw_square_studs(cv, b, clip):
     stud = attrs.get("StudSize", 11)
     edge = attrs.get("StudEdge", 2)
     phase = attrs.get("StudPhase", -4)
-    alpha = int(255 * (1 - attrs.get("StudTransparency", 0.8)))
+    base = attrs.get("StudTransparency", 0.8)
+    fade, fade_start = attrs.get("StudFade", 0), attrs.get("StudFadeStart", 0)
     width, height = round(b.w), round(b.h)
+
+    def alpha_at(y):  # StudBackground.EdgeTransparency: studs fade out towards the bottom
+        t = min(max((y / max(height, 1) - fade_start) / (1 - fade_start), 0), 1)
+        return int(255 * (1 - (base + (1 - base) * fade * t ** 1.3)))
+
     radius = min(attrs.get("StudRadiusScale", 0) * min(width, height) + attrs.get("StudRadiusOffset", 12), min(width, height) / 2)
     sx, sy, sw, sh = b.screen()
     k = b.k * SS
@@ -865,7 +871,7 @@ def draw_square_studs(cv, b, clip):
     d = ImageDraw.Draw(layer)
     for x, y, bw, bh in stud_layout(width, height, radius, pitch, stud, edge, phase):
         x0, y0 = round(x) * k, round(y) * k  # Roblox snaps offsets to whole pixels
-        d.rectangle((x0, y0, x0 + round(bw) * k - 1, y0 + round(bh) * k - 1), fill=(0, 0, 0, alpha))
+        d.rectangle((x0, y0, x0 + round(bw) * k - 1, y0 + round(bh) * k - 1), fill=(0, 0, 0, alpha_at(y + bh / 2)))
     cv.paste(layer, sx * SS, sy * SS, clip)
 
 

@@ -68,7 +68,7 @@ function EggPanel.new(parent: Instance, ctx: { [string]: any })
 		Visible = false,
 		ZIndex = 5,
 		Parent = parent,
-	}, { Create.Corner(UDim.new(0, 16)), Create.Stroke(4) })
+	}, { Create.Corner(UDim.new(0, 16)), Create.Glass(), Create.Stroke(4) })
 	self.Instance = panel
 	self.Scale = Create("UIScale", { Parent = panel })
 

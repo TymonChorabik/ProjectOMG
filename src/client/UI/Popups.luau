@@ -165,7 +165,7 @@ function Popups.Toast(message: string, kind: string?)
 		BackgroundColor3 = Theme.Colors.Window,
 		BackgroundTransparency = Theme.WindowTransparency,
 		BorderSizePixel = 0,
-	}, { Create.Corner(UDim.new(0, 12)), Create.Stroke(3) })
+	}, { Create.Corner(UDim.new(0, 12)), Create.Glass(), Create.Stroke(3) })
 	panel.LayoutOrder = math.floor(os.clock() * 1000) % 1_000_000_000
 	Create.Label({
 		Text = message,

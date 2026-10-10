@@ -31,7 +31,7 @@ function WelcomeBack.Show(parent: Instance, amount: number, seconds: number, onC
 		BorderSizePixel = 0,
 		ZIndex = 20,
 		Parent = parent,
-	}, { Create.Corner(UDim.new(0, 18)), Create.Stroke(3.5) })
+	}, { Create.Corner(UDim.new(0, 18)), Create.Glass(), Create.Stroke(3.5) })
 	local scale = Create("UIScale", { Scale = 0.5, Parent = panel })
 
 	Create.Icon({

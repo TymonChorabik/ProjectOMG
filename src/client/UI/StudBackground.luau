@@ -6,6 +6,7 @@
 
 	The grid is continuous like a real plate: it starts under the top-left edge, runs off every
 	side and is trimmed to the rounded outline, so the border cuts studs on all four sides.
+	Like the reference, the studs are clearest at the top and fade out towards the bottom.
 	Built from plain Frames: nothing to upload. Studs keep a fixed size (STUD px at 1080p,
 	scaled with the rest of the UI) and the grid is only rebuilt when the surface's unscaled
 	size changes (not during open/close scale tweens).
@@ -28,6 +29,8 @@ local GAP = 5 -- space between studs
 local EDGE = 2 -- thickness of the dark "L"
 local PHASE = -4 -- the grid starts under the top-left edge, so edge studs are cut
 local PITCH = STUD + GAP
+local FADE = 0.92 -- how far the studs fade by the bottom edge (0 = no fade, 1 = gone)
+local FADE_START = 0.12 -- fraction of the height that keeps full-strength studs
 
 export type Options = {
 	Tint: Color3?, -- ImageColor3 (texture mode)
@@ -49,7 +52,22 @@ local function buildImage(parent: GuiObject, options: Options?): ImageLabel
 		Parent = parent,
 	}, {
 		Create.Corner(options and options.CornerRadius),
+		Create("UIGradient", { -- fade out towards the bottom
+			Rotation = 90,
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(FADE_START, 0),
+				NumberSequenceKeypoint.new(1, FADE),
+			}),
+		}),
 	})
+end
+
+-- Transparency of a stud bar at `y` (its centre) on a surface `height` tall: full strength
+-- near the top, fading towards the bottom.
+function StudBackground.EdgeTransparency(base: number, y: number, height: number): number
+	local t = math.clamp((y / math.max(height, 1) - FADE_START) / (1 - FADE_START), 0, 1)
+	return base + (1 - base) * FADE * t ^ 1.3
 end
 
 -- Product of every UIScale from `gui` up to its ScreenGui: AbsoluteSize / this = design size.
@@ -135,6 +153,8 @@ local function buildStuds(parent: GuiObject, options: Options?): Frame
 	holder:SetAttribute("StudEdge", EDGE)
 	holder:SetAttribute("StudPhase", PHASE)
 	holder:SetAttribute("StudTransparency", edgeTransparency)
+	holder:SetAttribute("StudFade", FADE)
+	holder:SetAttribute("StudFadeStart", FADE_START)
 	holder:SetAttribute("StudRadiusScale", cornerRadius.Scale)
 	holder:SetAttribute("StudRadiusOffset", cornerRadius.Offset)
 	local builtWidth, builtHeight = -1, -1
@@ -153,7 +173,7 @@ local function buildStuds(parent: GuiObject, options: Options?): Frame
 		for _, bar in StudBackground.Layout(width, height, radius) do
 			Create("Frame", {
 				BackgroundColor3 = Color3.new(0, 0, 0),
-				BackgroundTransparency = edgeTransparency,
+				BackgroundTransparency = StudBackground.EdgeTransparency(edgeTransparency, bar[2] + bar[4] / 2, height),
 				BorderSizePixel = 0,
 				Position = UDim2.fromOffset(bar[1], bar[2]),
 				Size = UDim2.fromOffset(bar[3], bar[4]),

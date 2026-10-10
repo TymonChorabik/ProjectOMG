@@ -61,6 +61,7 @@ function MenuWindow.new(props: WindowProps)
 	}, {
 		Create.Corner(UDim.new(0, 18)),
 		Create.Stroke(4),
+		Create.Glass(),
 	})
 	self.Instance = panel
 	self._scale = Create("UIScale", { Parent = panel })

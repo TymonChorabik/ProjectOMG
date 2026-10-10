@@ -76,6 +76,11 @@ function Create.Bevel(strength: number?): UIGradient
 	})
 end
 
+-- Dark glass gradient for window bodies (Theme.Colors.Window background).
+function Create.Glass(): UIGradient
+	return create("UIGradient", { Name = "Glass", Rotation = 90, Color = Theme.GlassGradient })
+end
+
 -- Outlined cartoon text (white, heavy font, thick black outline). Extra props:
 -- Stroke = false (no outline), StrokeThickness, MaxTextSize.
 function Create.Label(props: { [string]: any }): TextLabel

@@ -26,7 +26,7 @@ Theme.Colors = {
 	Gray = Color3.fromRGB(130, 130, 140),
 	GrayDark = Color3.fromRGB(78, 78, 88),
 	Ink = Color3.fromRGB(18, 14, 22), -- outlines & text strokes
-	Window = Color3.fromRGB(46, 46, 54), -- translucent window body
+	Window = Color3.fromRGB(64, 66, 82), -- translucent window body (top of its glass gradient)
 	Tile = Color3.fromRGB(64, 64, 72), -- HUD menu tiles
 	Navy = Color3.fromRGB(28, 52, 96), -- claimed / disabled tiles
 	-- Older names kept for menus that still use them.
@@ -57,6 +57,18 @@ Theme.Rainbow = ColorSequence.new({
 	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(60, 150, 255)),
 	ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 80, 255)),
 })
+
+-- Plastic gradient for a colour: lighter and softer at the top, deeper and richer at the
+-- bottom (cards, buttons, tiles). Used on a white surface, so the gradient is the colour.
+function Theme.Gradient(color: Color3): ColorSequence
+	local h, s, v = color:ToHSV()
+	local top = Color3.fromHSV(h, math.clamp(s * 0.72, 0, 1), math.clamp(v + 0.14, 0, 1))
+	local bottom = Color3.fromHSV(h, math.clamp(s * 1.08 + 0.04, 0, 1), math.clamp(v - 0.14, 0, 1))
+	return ColorSequence.new(top, bottom)
+end
+
+-- Dark glass windows: multiplies Colors.Window, fading darker towards the bottom.
+Theme.GlassGradient = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(115, 115, 130))
 
 -- Darken a colour for bevel/shadow layers.
 function Theme.Shade(color: Color3, amount: number): Color3
