@@ -39,7 +39,8 @@ One big studded hub, laid out like *+1 Stone Skipping*:
 | **Egg panel** | **Rainbow Egg panel** | **Welcome Back** |
 | ![Egg panel](docs/ui/eggpanel.png) | ![Rainbow egg panel](docs/ui/eggpanel_robux.png) | ![Welcome back](docs/ui/welcomeback.png) |
 
-UI colours, bevels, tabs, slots and text rules: see [`docs/UI_STYLE.md`](docs/UI_STYLE.md).
+What the game is about: [`GAME_DESIGN.md`](GAME_DESIGN.md) · What's left: [`TODO.md`](TODO.md) ·
+UI colours, bevels, tabs, slots and text rules: [`docs/UI_STYLE.md`](docs/UI_STYLE.md).
 
 <sub>The real UI code rendered offline by `tools/uipreview/render_ui.py` (an approximation of Roblox's renderer: emoji and 3D pet previews will look slightly different in game).</sub>
 
