@@ -26,7 +26,7 @@ Theme.Colors = {
 	Gray = Color3.fromRGB(130, 130, 140),
 	GrayDark = Color3.fromRGB(78, 78, 88),
 	Ink = Color3.fromRGB(18, 14, 22), -- outlines & text strokes
-	Window = Color3.fromRGB(40, 42, 54), -- translucent window body (top of its glass gradient)
+	Window = Color3.new(1, 1, 1), -- window bodies: white, so GlassGradient below is their colour
 	Close = Color3.fromRGB(255, 40, 80), -- window close buttons
 	Tile = Color3.fromRGB(64, 64, 72), -- HUD menu tiles
 	Navy = Color3.fromRGB(28, 52, 96), -- claimed / disabled tiles
@@ -46,7 +46,7 @@ Theme.Colors = {
 	-- Item slots in dark grids: light enough not to melt into the backdrop.
 	Slot = Color3.fromRGB(122, 132, 160), -- #7A84A0
 	SlotLocked = Color3.fromRGB(104, 112, 138), -- #68708A
-	GridBackdrop = Color3.fromRGB(42, 47, 63), -- #2A2F3F
+	GridBackdrop = Color3.fromRGB(34, 36, 72), -- #222448 (deep indigo, matches the glass)
 }
 
 -- Soft card backdrops (the colour never fights the icon or text). Rainbow and gold are kept
@@ -104,8 +104,15 @@ function Theme.Gradient(color: Color3): ColorSequence
 	return ColorSequence.new(top, bottom)
 end
 
--- Dark glass windows: multiplies Colors.Window, fading darker towards the bottom.
-Theme.GlassGradient = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 185))
+-- Tinted glass for window bodies: deep blue → violet → plum, running diagonally from the
+-- top-left. Dark enough for white text, coloured enough to feel lively. Shown at
+-- WindowTransparency, so the world still shows through.
+Theme.GlassGradient = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 70, 150)), -- #284696 deep blue
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(70, 48, 140)), -- #46308C violet
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(96, 36, 112)), -- #602470 plum
+})
+Theme.GlassRotation = 45 -- degrees: top-left → bottom-right
 
 -- Darken a colour for bevel/shadow layers.
 function Theme.Shade(color: Color3, amount: number): Color3

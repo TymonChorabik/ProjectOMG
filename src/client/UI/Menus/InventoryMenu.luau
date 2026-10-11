@@ -27,7 +27,7 @@ local ViewportPreview = require(script.Parent.Parent.ViewportPreview)
 
 local InventoryMenu = {}
 
-local INFO_COLOR = Color3.fromRGB(70, 70, 84)
+local INFO_COLOR = Color3.fromRGB(78, 72, 128) -- soft indigo, matches the window glass
 local INFO_WIDTH = 236
 local TAB_IDLE, TAB_ACTIVE = 100, 114 -- side tab sizes
 local CELL = Vector2.new(96, 106)

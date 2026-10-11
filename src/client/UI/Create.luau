@@ -76,9 +76,9 @@ function Create.Bevel(strength: number?): UIGradient
 	})
 end
 
--- Dark glass gradient for window bodies (Theme.Colors.Window background).
+-- Tinted glass gradient for window bodies (Theme.Colors.Window background).
 function Create.Glass(): UIGradient
-	return create("UIGradient", { Name = "Glass", Rotation = 90, Color = Theme.GlassGradient })
+	return create("UIGradient", { Name = "Glass", Rotation = Theme.GlassRotation, Color = Theme.GlassGradient })
 end
 
 -- Soft drop shadow under a label: a dark copy of it one step behind and a few pixels lower,

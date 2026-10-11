@@ -14,14 +14,14 @@ the screen (about ×1.3 at 1080p, smaller on phones).
 | Use | Hex | Theme name |
 |---|---|---|
 | Outlines, text strokes, shadows | `#120E16` | `Colors.Ink` |
-| Window glass (top, 40% transparent) | `#282A36` | `Colors.Window` |
+| Window glass (40% transparent, 45° gradient) | `#284696` → `#46308C` → `#602470` | `GlassGradient` |
 | Primary / Robux button | `#60CE28` | `Colors.Green` |
 | CLAIM! bar, tick badge | `#3DDC5A` | `Colors.Claim` |
 | Countdown bar | `#1F2433` | `Colors.TimerBar` |
 | Close button | `#FF2850` | `Colors.Close` |
 | Side tab, idle | `#5B6482` | `Colors.TabIdle` |
 | Side tab, selected (+ white outline) | `#2EC4F0` | `Colors.TabActive` |
-| Grid backdrop (20% transparent) | `#2A2F3F` | `Colors.GridBackdrop` |
+| Grid backdrop (20% transparent) | `#222448` | `Colors.GridBackdrop` |
 | Item slot (tinted 45% toward the rarity) | `#7A84A0` | `Colors.Slot` |
 | Locked slot | `#68708A` | `Colors.SlotLocked` |
 | Currency / stat text | `#FFD632` | `Colors.Gold` |
@@ -47,10 +47,11 @@ Relic, the best playtime gift, and Secret pets.
 ## 2. Building blocks
 
 ### Window (`MenuWindow.new`)
-1. **Frame:** `BackgroundColor3 #282A36`, `BackgroundTransparency 0.4`.
+1. **Frame:** `BackgroundColor3` white, `BackgroundTransparency 0.4`.
    - `UICorner 10`
    - `UIStroke 3.5 Ink`
-   - `UIGradient` (glass: white → `#AAAAB9`, `Rotation 90`)
+   - `UIGradient` (tinted glass: deep blue `#284696` → violet `#46308C` → plum `#602470`,
+     `Rotation 45`)
 2. **Title:**
    - TextLabel centred on the top border, `Font FredokaOne`, `MaxTextSize 80`.
    - `UIStroke` 6.5 × 0.8 in Ink.
@@ -106,7 +107,7 @@ Relic, the best playtime gift, and Secret pets.
   icon.
 
 ### Grid slots (pets, hands, boosts)
-- **Backdrop:** `#2A2F3F` at 20% transparency, `UICorner 14`, `UIStroke 3.5`.
+- **Backdrop:** `#222448` at 20% transparency, `UICorner 14`, `UIStroke 3.5`.
   - `UIGridLayout`: 5 columns that stretch to fill (`CellSize (1/5, −4.8, 0, 106)`),
     `CellPadding 6`.
 - **Pet slot:**
